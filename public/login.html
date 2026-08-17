@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ログイン — 買取店マーケ</title>
+<style>
+  :root { --ink:#161616; --grey:#F4F4F4; --line:#e3e3e3; --mut:#888; --acc:#0645ad; --ok:#137333; --yellow:#FFE600; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; font-family:system-ui,'Chip Text',sans-serif; background:var(--grey); color:var(--ink); padding:20px; }
+  .box { width:100%; max-width:380px; background:#fff; border-radius:16px; padding:28px; box-shadow:0 2px 14px rgba(0,0,0,.08); }
+  h1 { font-size:20px; margin:0 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin:0 0 20px; }
+  button { width:100%; border:0; border-radius:9999px; padding:12px; font-size:15px; font-weight:700; cursor:pointer; }
+  .google { background:#fff; color:#161616; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; gap:8px; }
+  .google svg { width:18px; height:18px; }
+  .divider { display:flex; align-items:center; gap:10px; color:var(--mut); font-size:12px; margin:18px 0; }
+  .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--line); }
+  label { font-size:12px; color:var(--mut); display:block; margin:10px 0 4px; }
+  input { width:100%; background:#fff; color:var(--ink); border:1px solid var(--line); border-radius:8px; padding:10px; font-size:14px; }
+  .primary { background:var(--yellow); color:#161616; margin-top:16px; }
+  .ghost { background:transparent; color:var(--acc); border:0; font-size:13px; margin-top:10px; font-weight:600; }
+  .state { font-size:13px; min-height:18px; margin-top:12px; text-align:center; }
+  .state .err { color:#c0392b; } .state .ok { color:var(--ok); }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #0002; border-top-color:#161616; border-radius:50%; animation:s .8s linear infinite; vertical-align:middle; }
+  @keyframes s { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>買取店マーケ</h1>
+  <p class="sub" id="modeSub">ログインしてはじめましょう</p>
+
+  <button class="google" id="googleBtn">
+    <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.4 30.1 0 24 0 14.6 0 6.4 5.4 2.5 13.3l7.8 6.1C12.2 13.2 17.6 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.6c0-1.6-.1-2.8-.4-4H24v7.6h12.7c-.3 2.1-1.6 5.2-4.7 7.3l7.2 5.6c4.3-4 6.9-9.9 6.9-16.5z"/><path fill="#FBBC05" d="M10.3 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.8-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.5 10.7l7.8-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.2-5.6c-2 1.4-4.6 2.3-8.7 2.3-6.4 0-11.8-3.7-13.7-9l-7.8 6.1C6.4 42.6 14.6 48 24 48z"/></svg>
+    Googleでログイン
+  </button>
+
+  <div class="divider">または</div>
+
+  <label>メールアドレス</label>
+  <input type="email" id="email" placeholder="you@example.com" autocomplete="email" />
+  <label>パスワード</label>
+  <input type="password" id="password" placeholder="••••••••" autocomplete="current-password" />
+  <button class="primary" id="submitBtn">ログイン</button>
+  <button class="ghost" id="toggleMode">アカウントをお持ちでない方はこちら（新規登録）</button>
+  <div class="state" id="state"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const NEXT = params.get('next') || '/';
+let client = null, isSignup = false;
+
+function setState(msg, cls) { $('state').innerHTML = msg ? `<span class="${cls||''}">${msg}</span>` : ''; }
+
+async function boot() {
+  let cfg;
+  try { cfg = await (await fetch('/api/auth/config')).json(); } catch (e) { setState('設定の取得に失敗しました', 'err'); return; }
+  if (!cfg || !cfg.url || !cfg.anonKey) { setState('認証が未設定です（管理者にお問い合わせください）', 'err'); return; }
+  client = window.supabase.createClient(cfg.url, cfg.anonKey, {
+    auth: { detectSessionInUrl: true, persistSession: true, autoRefreshToken: true, flowType: 'implicit' },
+  });
+
+  const hash = location.hash || '';
+  const isOAuthCallback = hash.indexOf('access_token') >= 0 || hash.indexOf('error') >= 0;
+
+  client.auth.onAuthStateChange((event, session) => { if (session) location.replace(NEXT); });
+
+  const { data } = await client.auth.getSession();
+  if (data && data.session) { location.replace(NEXT); return; }
+
+  if (isOAuthCallback) {
+    setState('<span class="spin"></span> ログイン処理中…');
+    try {
+      const p = new URLSearchParams(hash.replace(/^#/, ''));
+      const access_token = p.get('access_token');
+      const refresh_token = p.get('refresh_token');
+      if (access_token && refresh_token) {
+        const { data: s, error } = await client.auth.setSession({ access_token, refresh_token });
+        if (s && s.session) { location.replace(NEXT); return; }
+        if (error) { setState('ログインに失敗しました: ' + error.message, 'err'); return; }
+      } else if (p.get('error_description')) {
+        setState('ログインに失敗しました: ' + p.get('error_description'), 'err'); return;
+      }
+    } catch (e) {}
+    setTimeout(async () => {
+      const { data: d2 } = await client.auth.getSession();
+      if (d2 && d2.session) location.replace(NEXT);
+      else setState('ログインを完了できませんでした。もう一度お試しください。', 'err');
+    }, 1500);
+  }
+}
+
+$('googleBtn').addEventListener('click', async () => {
+  if (!client) return;
+  setState('<span class="spin"></span> Googleへ移動します…');
+  const redirectTo = location.origin + '/login.html?next=' + encodeURIComponent(NEXT);
+  const { error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo } });
+  if (error) setState('エラー: ' + error.message, 'err');
+});
+
+$('toggleMode').addEventListener('click', () => {
+  isSignup = !isSignup;
+  $('modeSub').textContent = isSignup ? '新規登録してはじめましょう' : 'ログインしてはじめましょう';
+  $('submitBtn').textContent = isSignup ? '新規登録' : 'ログイン';
+  $('toggleMode').textContent = isSignup ? 'すでにアカウントをお持ちの方はこちら（ログイン）' : 'アカウントをお持ちでない方はこちら（新規登録）';
+  $('password').setAttribute('autocomplete', isSignup ? 'new-password' : 'current-password');
+  setState('');
+});
+
+$('submitBtn').addEventListener('click', async () => {
+  if (!client) return;
+  const email = $('email').value.trim(), password = $('password').value;
+  if (!email || !password) { setState('メールとパスワードを入力してください', 'err'); return; }
+  $('submitBtn').disabled = true;
+  setState('<span class="spin"></span> 処理中…');
+  try {
+    if (isSignup) {
+      const { data, error } = await client.auth.signUp({ email, password });
+      if (error) throw error;
+      if (data.session) { location.replace(NEXT); return; }
+      setState('確認メールを送信しました。メール内のリンクを開いてから、ログインしてください。', 'ok');
+    } else {
+      const { error } = await client.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      location.replace(NEXT);
+    }
+  } catch (e) {
+    setState('エラー: ' + (e.message || 'ログインに失敗しました'), 'err');
+  } finally { $('submitBtn').disabled = false; }
+});
+
+boot();
+</script>
+</body>
+</html>

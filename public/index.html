@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>買取店マーケティングシステム</title>
+<!-- 認証ガード（認証ON時のみ作動。未ログインは login.html へ。API に Bearer 自動付与）。最初に読む。 -->
+<script src="/auth-guard.js"></script>
+<style>
+:root{--yellow:#FFE600;--ink:#161616;--grey:#F4F4F4}
+*{box-sizing:border-box}
+body{font-family:system-ui,'Chip Text',sans-serif;margin:0;background:var(--grey);color:var(--ink)}
+header{background:var(--ink);color:#fff;padding:12px 20px;position:sticky;top:0;z-index:10}
+.hbar{max-width:940px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+header h1{margin:0;font-size:16px;flex:0 0 auto}header small{color:#bbb}
+.hbar .sp{flex:1}
+.hsel{display:flex;align-items:center;gap:6px;font-size:12px;color:#ccc}
+.hsel select{padding:7px 10px;border:0;border-radius:8px;font-size:13px;font-family:inherit;min-width:150px}
+.wrap{max-width:940px;margin:0 auto;padding:20px 16px}
+.view{display:none}.view.on{display:block}
+.step{background:#fff;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
+.step h2{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
+.no{background:var(--yellow);color:var(--ink);width:24px;height:24px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+h3{font-size:13px;margin:16px 0 6px;border-left:4px solid var(--yellow);padding-left:8px}
+label{display:block;font-size:13px;margin:8px 0 4px}
+input,select,textarea{width:100%;padding:10px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:150px}
+button{padding:11px 18px;border:0;border-radius:9999px;background:var(--ink);color:#fff;font-weight:700;cursor:pointer;font-size:14px}
+button.y{background:var(--yellow);color:var(--ink)}
+button.sm{font-size:12px;padding:7px 13px}
+button.ghost{background:#eee;color:var(--ink)}
+button:disabled{opacity:.4;cursor:not-allowed}
+.muted{color:#888;font-size:12px}
+.out{background:var(--grey);border-radius:10px;padding:12px;margin-top:10px;font-size:13px}
+.pill{display:inline-block;background:#eee;border-radius:9999px;padding:2px 10px;font-size:12px;margin-right:6px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:680px){.grid2{grid-template-columns:1fr}}
+video{width:100%;max-width:260px;border-radius:12px;background:#000}
+img.qr{width:170px;height:170px}
+img.qrs{width:96px;height:96px}
+.chk{display:inline-flex;align-items:center;gap:6px;background:#eee;border-radius:9999px;padding:6px 12px;margin:3px;font-size:13px;cursor:pointer}
+.chk input{width:auto;margin:0}
+.art{border:1px solid #e3e3e3;border-radius:10px;padding:10px;margin:8px 0}
+.art textarea{width:100%;min-height:120px;font-size:13px}
+.thumbs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.thumbs .t{position:relative}
+.thumbs img{width:56px;height:56px;object-fit:cover;border-radius:8px}
+.thumbs .t button{position:absolute;top:-6px;right:-6px;padding:0;width:20px;height:20px;border-radius:9999px;font-size:12px}
+.switch{display:inline-flex;align-items:center;gap:8px;font-size:13px}
+.list{list-style:none;margin:0;padding:0}
+.list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid #eee}
+.list li:first-child{border-top:0}
+.list li.hl{background:#FFF7CC;border-radius:8px;animation:hlfade 2.2s ease-out}
+@keyframes hlfade{0%{background:#FFE600}100%{background:#FFF7CC}}
+.list .main{flex:1;min-width:0}
+.list .main b{font-size:14px}
+.list .main .sub{font-size:12px;color:#888}
+.link{color:#0645ad;text-decoration:none}.link:hover{text-decoration:underline}
+.notice{background:#FFF7CC;border:1px solid #ffe600;border-radius:10px;padding:10px 12px;font-size:13px;margin-bottom:14px}
+/* ダイアログ */
+dialog{border:0;border-radius:16px;padding:0;max-width:520px;width:92%;box-shadow:0 12px 40px rgba(0,0,0,.25)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+.dlg-h{background:var(--ink);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center}
+.dlg-h b{font-size:15px}
+.dlg-b{padding:18px}
+.dlg-b .kv{font-size:13px;margin:6px 0}
+.dlg-b .kv span{color:#888}
+.xbtn{background:transparent;color:#fff;padding:2px 8px;font-size:18px}
+</style>
+</head>
+<body>
+<header>
+  <div class="hbar">
+    <h1>買取店マーケ <small>MVP</small></h1>
+    <div class="hsel">ビュー
+      <select id="nav">
+        <option value="gen">キャンペーン生成</option>
+        <option value="post">投稿</option>
+        <option value="list">キャンペーン一覧</option>
+        <option value="article">記事（ブログ/HP）</option>
+        <option value="ad">広告</option>
+        <option value="reg">登録</option>
+      </select>
+    </div>
+    <div class="hsel">作業対象の店舗
+      <select id="storeSel"><option value="">（店舗を選択）</option></select>
+    </div>
+    <div class="sp"></div>
+    <small id="claudeState"></small>
+    <button id="logoutBtn" class="sm ghost" style="display:none;margin-left:10px" title="ログアウト">ログアウト</button>
+  </div>
+</header>
+<div class="wrap">
+
+  <!-- ============ 登録ビュー ============ -->
+  <section class="view" id="view-reg">
+    <div class="step">
+      <h2><span class="no">店</span>店舗を登録 / 編集</h2>
+      <p class="muted">ヘッダーで店舗を選ぶと編集、「＋新規」で新しい店舗を登録します。</p>
+      <div style="margin:6px 0"><button class="sm ghost" onclick="newStore()">＋ 新規で登録する</button></div>
+      <hr style="border:0;border-top:1px solid #eee;margin:12px 0">
+      <div class="row">
+        <div><label>業態</label><select id="s_bt"></select></div>
+        <div><label>店名</label><input id="s_name" placeholder="○○買取センター"></div>
+      </div>
+      <div class="row">
+        <div><label>エリア</label><input id="s_area" placeholder="渋谷区"></div>
+        <div><label>電話</label><input id="s_tel" placeholder="03-xxxx-xxxx"></div>
+      </div>
+      <div id="s_licenses"></div>
+      <div class="row"><div><label>ブランドカラー</label><input id="s_color" type="color" value="#FFE600"></div></div>
+      <button class="y" id="s_save" onclick="saveStore()">店舗を作成</button>
+      <span id="s_delbox" style="display:none;margin-left:10px">
+        <button class="sm ghost" onclick="deleteStore(false)">この店舗を削除</button>
+        <button class="sm" style="background:#c0392b" onclick="deleteStore(true)">関連ごとすべて削除</button>
+      </span>
+      <div id="s_out" class="out" style="display:none"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">QR</span>QR / URL を作成</h2>
+      <p class="muted">来店者はこのQR/URLから申込フォームへ。<b>店舗の常設フォーム</b>です（開くとその店舗のアクティブなキャンペーンを自動表示）。1店舗に複数作れます。</p>
+      <div class="row">
+        <div><label>QRの名前（用途がわかる名前）</label><input id="q_label" placeholder="店頭ポップ用 / チラシ用 など"></div>
+        <div style="flex:0 0 auto;align-self:flex-end"><button class="y" onclick="createQr()">QR / URL を発行</button></div>
+      </div>
+      <div id="q_out" class="out" style="display:none"></div>
+
+      <h3>申込フォーム設定</h3>
+      <div class="row">
+        <div><label>写真 最小枚数</label><input id="fc_min" type="number" min="0" max="10" value="5"></div>
+        <div><label>写真 最大枚数</label><input id="fc_max" type="number" min="1" max="10" value="10"></div>
+      </div>
+      <label class="switch" style="margin:10px 0"><input type="checkbox" id="fc_either" checked style="width:auto"> 電話番号とメールアドレスは<b>どちらか一方を必須</b>にする</label>
+      <p class="muted">お名前は必須です。上をONにすると、電話・メールの両方が空だと申込できません（査定結果などの連絡先を確保）。OFFなら両方任意になります。</p>
+      <button class="sm" onclick="saveFormConfig()">フォーム設定を保存</button>
+      <div id="fc_out" class="out" style="display:none"></div>
+
+      <h3>応募の送信先</h3>
+      <div class="row">
+        <div><label>通知メール（記録のみ）</label><input id="dv_email" type="email" placeholder="store@example.com"></div>
+        <div><label>LINE Notify トークン</label><input id="dv_line" placeholder="任意"></div>
+      </div>
+      <label>Webhook URL（任意）</label><input id="dv_webhook" placeholder="https://...">
+      <button class="sm" onclick="saveDelivery()">送信先を保存</button>
+      <div id="dv_out" class="out" style="display:none"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">投</span>投稿先を登録</h2>
+      <p class="muted">記事を各投稿先へその場のボタンで投稿できます。<b>自動投稿できる投稿先</b>はボタンで即投稿、できない投稿先はコピーして手動投稿します。自動化用と手動用、必要な方だけ入力すればOKです。</p>
+      <div class="row">
+        <div><label>投稿先の種類</label><select id="cn_driver"></select></div>
+        <div><label>表示名（任意）</label><input id="cn_label" placeholder="例: 公式LINE / 自社HP"></div>
+      </div>
+      <div id="cn_autobox"></div>
+      <div id="cn_manualbox"></div>
+      <label class="switch" style="margin:10px 0"><input type="checkbox" id="cn_auto" style="width:auto"> 投稿ボタンで<b>自動投稿を試みる</b>（自動対応の投稿先のみ）</label>
+      <div><button class="y" onclick="saveConnection()">投稿先を登録</button></div>
+      <div id="cn_out" class="out" style="display:none"></div>
+
+      <h3>登録済みの投稿先</h3>
+      <ul class="list" id="cn_list"><li class="muted">店舗を選択すると表示します。</li></ul>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">一</span>現在の登録一覧</h2>
+      <h3>登録済みの店舗</h3>
+      <ul class="list" id="reg_stores"><li class="muted">読込中…</li></ul>
+      <h3>この店舗のQR / URL</h3>
+      <ul class="list" id="reg_forms"><li class="muted">店舗を選択すると表示します。</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ キャンペーン生成ビュー ============ -->
+  <section class="view" id="view-gen">
+    <div class="notice" id="gen_guard" style="display:none">先に「登録」ビューで店舗とQR/URLを作成し、ヘッダーで作業対象の店舗を選んでください。</div>
+
+    <div class="step">
+      <h2><span class="no">1</span>キャンペーンを入力</h2>
+      <div class="row">
+        <div><label>タイトル</label><input id="c_title" placeholder="買取額15%アップ！"></div>
+        <div><label>種別</label><select id="c_type"><option value="rate_up">買取額アップ</option><option value="cashback">キャッシュバック</option><option value="gift">プレゼント</option></select></div>
+      </div>
+      <label>詳細</label><textarea id="c_detail" rows="2" placeholder="今週末限定。来店で全品対象。"></textarea>
+      <div class="row">
+        <div><label>使用する QR / URL <span class="muted">（必須）</span></label><select id="c_form"><option value="">（先に店舗を選択）</option></select></div>
+        <div><label>有効期限</label><input id="c_to" type="date"></div>
+      </div>
+      <button class="y" onclick="createCampaign()">キャンペーン作成</button>
+      <div id="c_out" class="out" style="display:none"></div>
+    </div>
+
+    <div class="step" id="gstep2" style="opacity:.5;pointer-events:none">
+      <h2><span class="no">2</span>記事を生成（複数SNS同時）</h2>
+      <label>投稿先を選択（複数可）</label>
+      <div id="ch_boxes"></div>
+      <button onclick="genArticles()">選択したSNS向けに一括生成</button>
+      <div id="a_out"></div>
+    </div>
+
+    <div class="step" id="gstep3" style="opacity:.5;pointer-events:none">
+      <h2><span class="no">3</span>動画を生成（スライドショー）</h2>
+      <div class="grid2">
+        <div>
+          <h3>素材</h3>
+          <label>写真を追加（複数可）</label>
+          <input id="v_files" type="file" accept="image/*" multiple onchange="uploadImages()">
+          <label>動画から静止画を作る（看板/商品を撮った動画）</label>
+          <input id="v_video" type="file" accept="video/*" onchange="extractFromVideo()">
+          <label>動画から作る枚数</label><input id="v_want" type="number" min="1" max="10" value="3">
+          <div class="muted">動画に写った看板/ロゴ/商品を静止画に切り出してスライドに使います（お店の素材からの生成）。</div>
+          <div class="thumbs" id="v_thumbs"></div>
+        </div>
+        <div>
+          <h3>テロップ・BGM</h3>
+          <label>テロップ（1行1枚・空欄可）</label>
+          <textarea id="v_caps" rows="3" placeholder="買取額15%アップ！&#10;今週末限定&#10;渋谷買取センター"></textarea>
+          <label>1枚あたり秒数</label><input id="v_sec" type="number" value="4" min="2" max="8">
+          <label class="switch"><input type="checkbox" id="v_bgm_on" checked style="width:auto"> BGMを付ける</label>
+          <label>BGM選択</label>
+          <select id="v_bgm"></select>
+          <input id="v_bgm_file" type="file" accept="audio/*" onchange="uploadBgm()">
+          <div class="muted">音源を追加できます（著作権フリーのもの）。</div>
+        </div>
+      </div>
+      <button class="y" onclick="genVideo()" style="margin-top:12px">スライドショー動画を生成</button>
+      <div id="v_out" class="out" style="display:none"></div>
+    </div>
+  </section>
+
+  <!-- ============ 投稿ビュー ============ -->
+  <section class="view" id="view-post">
+    <div class="step">
+      <h2><span class="no">投</span>投稿する</h2>
+      <p class="muted">キャンペーンを選ぶと、生成済みの各SNS文言と登録済み投稿先が一覧になります。自動対応は「投稿」ボタンで即送信、手動は「コピー」して各SNSへ貼り、投稿済みを記録できます。</p>
+      <div class="row">
+        <div><label>キャンペーンを選択</label><select id="pb_campaign"><option value="">（選択してください）</option></select></div>
+      </div>
+      <div id="pb_hint" class="notice" style="display:none"></div>
+      <div id="pb_board"></div>
+    </div>
+  </section>
+
+  <!-- ============ キャンペーン一覧ビュー ============ -->
+  <section class="view" id="view-list">
+    <div class="step">
+      <h2><span class="no">覧</span>キャンペーン一覧</h2>
+      <p class="muted">ヘッダーで店舗を選ぶとその店舗のみ、未選択なら全店舗のキャンペーンを表示します。名前をクリックで内容を表示。</p>
+      <ul class="list" id="camp_list"><li class="muted">読込中…</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ 記事（ブログ/HP）ビュー ============ -->
+  <section class="view" id="view-article">
+    <div class="notice" id="art_guard" style="display:none">ヘッダーで作業対象の店舗を選んでください。</div>
+
+    <div class="step">
+      <h2><span class="no">文</span>文体プロファイル（この店舗の書き方をAIが学習）</h2>
+      <p class="muted">過去記事などを「お手本」として登録し、スタイルを指定すると、AIがこの店舗の文体に寄せて記事を書きます。学習は店舗ごとです。</p>
+      <div class="row">
+        <div><label>文体</label><select id="st_tone"><option value="polite">です・ます調</option><option value="casual">だ・である調</option><option value="friendly">やわらかい口語</option></select></div>
+        <div><label>硬さ</label><select id="st_hardness"><option value="soft">やわらかめ</option><option value="normal">標準</option><option value="hard">硬め</option></select></div>
+        <div><label>長さの目安</label><select id="st_length"><option value="short">短め(400-600字)</option><option value="medium">標準(800-1200字)</option><option value="long">長め(1500-2500字)</option></select></div>
+      </div>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="st_emoji" style="width:auto"> 絵文字を使う</label>
+      <label>追加の指示（任意）</label><input id="st_notes" placeholder="例: 専門用語は避ける／地域名を必ず入れる">
+      <label>お手本の文章（過去記事など。1枚に1つ、複数可）</label>
+      <div id="st_samples"></div>
+      <div style="margin:6px 0"><button class="sm ghost" onclick="addSample()">＋ お手本を追加</button></div>
+      <button class="y" onclick="saveStyle()">文体プロファイルを保存</button>
+      <div id="st_out" class="out" style="display:none"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">刻</span>自動生成スケジュール</h2>
+      <p class="muted">テーマと時刻を登録すると、<b>アプリ起動中</b>にその時刻が来たら、学習した文体で記事の下書きが自動生成されて「保存した記事」に溜まります（アップロードはしません）。</p>
+      <div class="row">
+        <div><label>テーマ</label><input id="sc_theme" placeholder="例: 今週の買取実績／季節のお役立ち情報"></div>
+        <div style="flex:0 0 140px"><label>頻度</label><select id="sc_freq"><option value="daily">毎日</option><option value="weekly">毎週</option></select></div>
+        <div id="sc_wdaybox" style="flex:0 0 140px;display:none"><label>曜日</label><select id="sc_weekday"><option value="0">日</option><option value="1">月</option><option value="2">火</option><option value="3">水</option><option value="4">木</option><option value="5">金</option><option value="6">土</option></select></div>
+        <div style="flex:0 0 120px"><label>時刻</label><input id="sc_time" type="time" value="09:00"></div>
+        <div style="flex:0 0 auto;align-self:flex-end"><button class="y" onclick="saveSchedule()">追加</button></div>
+      </div>
+      <div id="sc_out" class="out" style="display:none"></div>
+      <ul class="list" id="sc_list"><li class="muted">店舗を選択すると表示します。</li></ul>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">筆</span>記事を書く（AIと共同編集）</h2>
+      <div class="row">
+        <div><label>テーマ</label><input id="ar_theme" placeholder="例: カメラの買取実績／初めての方向けガイド"></div>
+        <div style="flex:0 0 auto;align-self:flex-end"><button class="y" onclick="artAction('generate')">このテーマで生成</button></div>
+      </div>
+      <label>タイトル</label><input id="ar_title" placeholder="記事タイトル">
+      <label>本文（手動で書いても、AIに書かせてもOK）</label>
+      <textarea id="ar_body" rows="14" placeholder="ここに本文。下のボタンでAIが続きを書く・整える・膨らませる等ができます。"></textarea>
+      <div class="muted" style="margin:8px 0 4px">AIアクション（現在の本文に対して）:</div>
+      <div class="postbtns">
+        <button class="sm" onclick="artAction('continue')">続きを書く</button>
+        <button class="sm" onclick="artAction('polish')">整える・校正</button>
+        <button class="sm" onclick="artAction('expand')">膨らませる</button>
+        <button class="sm" onclick="artAction('shorten')">短くする</button>
+        <button class="sm" onclick="artAction('restyle')">この文体で書き直す</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>自由指示でAIに依頼</label><input id="ar_instr" placeholder="例: 見出しを増やして具体例を足して"></div>
+        <div style="flex:0 0 auto;align-self:flex-end"><button class="sm" onclick="artAction('custom')">指示を適用</button></div>
+      </div>
+      <div id="ar_out" class="out" style="display:none"></div>
+      <div style="margin-top:12px">
+        <button class="y" onclick="saveArticleDoc()">記事を保存</button>
+        <button class="sm ghost" onclick="copyArticleBody()">本文をコピー</button>
+        <button class="sm ghost" onclick="newArticleDoc()">新規（クリア）</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">庫</span>保存した記事</h2>
+      <ul class="list" id="ar_list"><li class="muted">店舗を選択すると表示します。</li></ul>
+    </div>
+  </section>
+
+  <!-- ============ 広告ビュー ============ -->
+  <section class="view" id="view-ad">
+    <div class="notice" id="ad_guard" style="display:none">ヘッダーで作業対象の店舗を選んでください。</div>
+
+    <div class="step">
+      <h2><span class="no">告</span>広告クリエイティブ（各メディア専用フォーマット）</h2>
+      <p class="muted">選んだメディアの<b>広告枠にそのままコピペできる形</b>で文面を生成します。配信は各メディアの管理画面で行ってください（自動出稿はしません）。文体プロファイルがあれば反映されます。</p>
+      <div class="row">
+        <div><label>使うキャンペーン（任意・訴求の元）</label><select id="ad_campaign"><option value="">（選択しない）</option></select></div>
+        <div><label>CTAに使うQR/URL（任意）</label><select id="ad_form"><option value="">（なし）</option></select></div>
+      </div>
+      <label>配信メディア（複数可）</label>
+      <div id="ad_medias"></div>
+      <label>追加の指示（任意）</label><input id="ad_extra" placeholder="例: 20代女性向け／出張買取を強調／緊急性を出す">
+      <div style="margin-top:10px"><button class="y" onclick="genAdCopy()">広告文を生成</button></div>
+      <div id="ad_out"></div>
+    </div>
+
+    <div class="step">
+      <h2><span class="no">動</span>広告動画</h2>
+      <p class="muted">広告の「型」に沿ってAIがテロップを作り、写真スライド＋テロップ＋末尾CTA（QR）で縦型ショート動画を生成します。生成後はダウンロードして各メディアの管理画面へ入稿してください。</p>
+      <div class="row">
+        <div><label>広告の型</label><select id="avd_template"></select></div>
+        <div><label>比率</label><select id="avd_aspect"></select></div>
+      </div>
+      <div class="row">
+        <div><label>使うキャンペーン（任意）</label><select id="avd_campaign"><option value="">（選択しない）</option></select></div>
+        <div><label>CTAに使うQR/URL（任意）</label><select id="avd_form"><option value="">（なし）</option></select></div>
+      </div>
+      <label>写真を追加（複数可）</label>
+      <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
+      <div class="thumbs" id="avd_thumbs"></div>
+      <label>追加の指示（任意）</label><input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_bgm_on" checked style="width:auto"> BGMを付ける（登録済みの先頭音源）</label>
+      <div style="margin-top:8px"><button class="y" onclick="genAdVideo()">広告動画を生成</button></div>
+      <div id="avd_out" class="out" style="display:none"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- キャンペーン詳細ダイアログ -->
+<dialog id="campDlg">
+  <div class="dlg-h"><b id="dlg_title">キャンペーン</b><button class="xbtn" onclick="document.getElementById('campDlg').close()">×</button></div>
+  <div class="dlg-b" id="dlg_body"></div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+# Render Blueprint（買取店マーケ QuickMarketing-Pro）。
+# Docker で web サービスを1つ。DBは外部Supabase Postgres、ファイルは外部Supabase Storage（Renderにはディスク不要）。
+# 環境変数のうち秘匿情報は sync:false（Renderダッシュボードで手入力）。
+services:
+  - type: web
+    name: quickmarketing-pro
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # 認証（Supabase）。マルチユーザーONにするため 1。
+      - key: AUTH_REQUIRED
+        value: "1"
+      # 本番URL。デプロイ後に確定するRenderのURL（または独自ドメイン）に更新すること。
+      - key: PUBLIC_BASE_URL
+        sync: false
+      # --- 秘匿情報（Renderダッシュボードで手入力） ---
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: SUPABASE_PUBLIC_BUCKET
+        value: assets
+      - key: SUPABASE_PRIVATE_BUCKET
+        value: submissions
+      # 記事/広告のAI生成。未設定ならテンプレ生成にフォールバック。
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5

@@ -58,18 +58,16 @@ function fallbackCaptions({ store, campaign, scenes }) {
 export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], bgmPath = null, autoBgm = true }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
-  if (asp.status !== 'ready') {
-    // 現状エンジンは 9:16 のみ。未実装比率は 9:16 にフォールバックし警告を返す。
-  }
   const captions = await buildCaptions({ store, campaign, template, style, extra });
   // シーン数に合わせて1枚あたり秒数を決める（テンプレの平均尺）。写真が少なければ既存ロジックが単色/ループで補完。
   const avgPer = Math.round(template.scenes.reduce((a, s) => a + s.seconds, 0) / template.scenes.length) || 4;
 
+  // 比率のW/Hをエンジンに渡す（9:16/1:1/16:9すべて対応）。
   const result = await generateSlideshow({
     storeId: store.id, brandColor: store.brand_color, ctaUrl,
     ctaLabel: ctaLabel || 'この店に今すぐ査定',
     images, captions, perSlide: Math.max(2, Math.min(6, avgPer)),
-    autoBgm, bgmPath,
+    autoBgm, bgmPath, width: asp.w, height: asp.h,
   });
-  return { ...result, template: templateKey, aspect: asp.status === 'ready' ? aspect : '9:16', captions };
+  return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', captions };
 }

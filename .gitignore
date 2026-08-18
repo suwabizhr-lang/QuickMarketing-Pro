@@ -3,3 +3,6 @@ node_modules/
 data/*.db
 data/assets/
 *.log
+
+# 一時ファイル・秘匿メモ（コミット禁止）
+_*

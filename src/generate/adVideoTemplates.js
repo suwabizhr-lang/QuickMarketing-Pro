@@ -10,8 +10,8 @@
 
 export const AD_VIDEO_ASPECTS = {
   '9:16': { label: 'リール/ストーリーズ（縦 9:16）', w: 1080, h: 1920, status: 'ready' },
-  '1:1': { label: '正方形（1:1）', w: 1080, h: 1080, status: 'planned' },
-  '16:9': { label: '横（16:9）', w: 1920, h: 1080, status: 'planned' },
+  '1:1': { label: '正方形（1:1・フィード向け）', w: 1080, h: 1080, status: 'ready' },
+  '16:9': { label: '横（16:9・YouTube/一般向け）', w: 1920, h: 1080, status: 'ready' },
 };
 
 export const AD_VIDEO_TEMPLATES = {

@@ -12,7 +12,7 @@ import { qrPngBuffer } from './qr.js';
 import { telopPng } from './telop.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const W = 1080, H = 1920, FPS = 30;
+const W = 1080, H = 1920, FPS = 30; // 既定は 9:16。generateSlideshow の width/height で上書き可。
 const assetsRoot = join(__dirname, '..', '..', 'data', 'assets');
 const bgmDir = join(__dirname, '..', '..', 'assets', 'bgm'); // フリー音源を置く場所（任意）
 
@@ -35,30 +35,30 @@ function findBgm() {
   } catch { return null; }
 }
 
-// 写真を 9:16 にカバー配置した中間 PNG を作る（Ken Burns の入力を安定させるため事前に整形）
-async function coverToFrame(srcPath, outPath) {
+// 写真を指定比率にカバー配置した中間 PNG を作る（Ken Burns の入力を安定させるため事前に整形）
+async function coverToFrame(srcPath, outPath, w = W, h = H) {
   await sharp(srcPath)
-    .resize(W, H, { fit: 'cover', position: 'centre' })
+    .resize(w, h, { fit: 'cover', position: 'centre' })
     .png()
     .toFile(outPath);
 }
 
 // 1枚のスライド（写真 or 単色）に Ken Burns + テロップを乗せた無音セグメントmp4を作る
-async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, idx }) {
+async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, idx, w = W, h = H }) {
   const seg = join(tmp, `seg${idx}.mp4`);
   const telop = join(tmp, `telop${idx}.png`);
-  writeFileSync(telop, await telopPng({ text: telopText || '', position: position || 'bottom' }));
+  writeFileSync(telop, await telopPng({ text: telopText || '', position: position || 'bottom', width: w, height: h }));
 
   const frames = Math.max(1, Math.round(dur * FPS));
   // Ken Burns: ゆっくり 1.0→1.12 ズームイン。中心固定。
-  const zoompan = `zoompan=z='min(zoom+0.0012,1.12)':d=${frames}:s=${W}x${H}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':fps=${FPS}`;
+  const zoompan = `zoompan=z='min(zoom+0.0012,1.12)':d=${frames}:s=${w}x${h}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':fps=${FPS}`;
 
   const args = [];
   if (imgPath) {
     args.push('-loop', '1', '-t', String(dur), '-i', imgPath);
   } else {
     // 単色フォールバック
-    args.push('-f', 'lavfi', '-t', String(dur), '-i', `color=c=${brandColor.replace('#', '')}:s=${W}x${H}`);
+    args.push('-f', 'lavfi', '-t', String(dur), '-i', `color=c=${brandColor.replace('#', '')}:s=${w}x${h}`);
   }
   args.push('-i', telop); // [1] テロップ
   args.push(
@@ -75,18 +75,20 @@ async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, 
 }
 
 // 末尾CTAカット（白背景に中央QR + 上部テロップ）。ctaUrl が空なら QR を省きテロップのみ。
-async function buildCta({ ctaUrl, ctaLabel, dur, tmp }) {
+async function buildCta({ ctaUrl, ctaLabel, dur, tmp, w = W, h = H }) {
   const seg = join(tmp, 'seg_cta.mp4');
   const telop = join(tmp, 'telop_cta.png');
-  writeFileSync(telop, await telopPng({ text: ctaLabel || 'この店に今すぐ査定', position: 'top', style: 'band' }));
+  writeFileSync(telop, await telopPng({ text: ctaLabel || 'この店に今すぐ査定', position: 'top', style: 'band', width: w, height: h }));
   const url = (ctaUrl || '').trim();
+  // QRサイズは短辺の約6割（比率が変わっても収まるように）
+  const qrSize = Math.round(Math.min(w, h) * 0.63);
 
   let args;
   if (url) {
     const qrPath = join(tmp, 'qr.png');
-    writeFileSync(qrPath, await qrPngBuffer(url, { width: 680 }));
+    writeFileSync(qrPath, await qrPngBuffer(url, { width: qrSize }));
     args = [
-      '-f', 'lavfi', '-t', String(dur), '-i', `color=c=white:s=${W}x${H}`,
+      '-f', 'lavfi', '-t', String(dur), '-i', `color=c=white:s=${w}x${h}`,
       '-loop', '1', '-t', String(dur), '-i', qrPath,
       '-i', telop,
       '-filter_complex',
@@ -98,7 +100,7 @@ async function buildCta({ ctaUrl, ctaLabel, dur, tmp }) {
   } else {
     // QRなし: 白背景 + テロップのみ
     args = [
-      '-f', 'lavfi', '-t', String(dur), '-i', `color=c=white:s=${W}x${H}`,
+      '-f', 'lavfi', '-t', String(dur), '-i', `color=c=white:s=${w}x${h}`,
       '-i', telop,
       '-filter_complex', `[0:v][1:v]overlay=0:0,format=yuv420p[v]`,
       '-map', '[v]', '-r', String(FPS), '-t', String(dur),
@@ -126,7 +128,9 @@ async function buildCta({ ctaUrl, ctaLabel, dur, tmp }) {
 export async function generateSlideshow({
   storeId, brandColor = '#FFE600', ctaUrl, ctaLabel = 'この店に今すぐ査定',
   images = [], captions = [], perSlide = 4, autoBgm = true, bgmPath = null,
+  width = W, height = H, // 比率対応: 9:16=1080x1920 / 1:1=1080x1080 / 16:9=1920x1080
 }) {
+  const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
   mkdirSync(outDir, { recursive: true });
   const tmp = join(outDir, 'tmp-' + Date.now());
@@ -143,9 +147,9 @@ export async function generateSlideshow({
       // 写真あり: 写真ごとに1スライド。テロップは対応する captions[i]（無ければ空）。
       for (let i = 0; i < images.length; i++) {
         const framePng = join(tmp, `frame${i}.png`);
-        await coverToFrame(images[i], framePng);
+        await coverToFrame(images[i], framePng, w, h);
         pushSeg(await buildSlide({
-          imgPath: framePng, telopText: captions[i] || '', position: 'bottom', dur: perSlide, tmp, idx: i,
+          imgPath: framePng, telopText: captions[i] || '', position: 'bottom', dur: perSlide, tmp, idx: i, w, h,
         }), perSlide);
       }
     } else if (captions.length > 0) {
@@ -153,21 +157,21 @@ export async function generateSlideshow({
       for (let i = 0; i < captions.length; i++) {
         const d = Math.max(3, perSlide);
         pushSeg(await buildSlide({
-          imgPath: null, brandColor, telopText: captions[i] || '', position: 'center', dur: d, tmp, idx: i,
+          imgPath: null, brandColor, telopText: captions[i] || '', position: 'center', dur: d, tmp, idx: i, w, h,
         }), d);
       }
     } else {
       // 何も無い: 単色スライド1枚
       const d = Math.max(6, perSlide * 3);
       pushSeg(await buildSlide({
-        imgPath: null, brandColor, telopText: '', position: 'center', dur: d, tmp, idx: 0,
+        imgPath: null, brandColor, telopText: '', position: 'center', dur: d, tmp, idx: 0, w, h,
       }), d);
     }
 
     const slideCount = segs.length; // CTA前のスライド数
 
     // 末尾CTAカット
-    pushSeg(await buildCta({ ctaUrl, ctaLabel, dur: ctaDur, tmp }), ctaDur);
+    pushSeg(await buildCta({ ctaUrl, ctaLabel, dur: ctaDur, tmp, w, h }), ctaDur);
 
     // concat リスト
     const listPath = join(tmp, 'list.txt');

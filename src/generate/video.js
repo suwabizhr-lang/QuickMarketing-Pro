@@ -173,34 +173,71 @@ export async function generateSlideshow({
     // 末尾CTAカット
     pushSeg(await buildCta({ ctaUrl, ctaLabel, dur: ctaDur, tmp, w, h }), ctaDur);
 
-    // concat リスト
-    const listPath = join(tmp, 'list.txt');
-    writeFileSync(listPath, segs.map(s => `file '${s.replace(/\\/g, '/')}'`).join('\n'), 'utf8');
-
     // BGM: 明示指定 > 自動探索。autoBgm=false なら無音。
     const bgm = autoBgm ? (bgmPath || findBgm()) : null;
-    const bodySeconds = durs.reduce((a, b) => a + b, 0);
+    const rawSeconds = durs.reduce((a, b) => a + b, 0);
 
-    if (bgm) {
-      // 映像を concat しつつ BGM をミックス（映像尺に合わせて途中フェードアウト）
+    // 演出: スライド間クロスフェード(xfade)。XF秒だけ前後を重ねる。重なる分だけ総尺が縮む。
+    const XF = 0.5;
+    const n = segs.length;
+    const useXfade = n >= 2;
+    const bodySeconds = useXfade ? Math.max(1, rawSeconds - XF * (n - 1)) : rawSeconds;
+
+    // 映像フィルタ（xfadeチェーン）を組み立てる。BGM有無で map を切り替える。
+    const vInputs = segs.flatMap(s => ['-i', s]);
+    let videoFilter = '';
+    if (useXfade) {
+      // 各入力を fps 揃え＆フォーマット統一 → 順に xfade。offset は「累積表示尺 − 累積XF」。
+      let chain = segs.map((_, i) => `[${i}:v]format=yuv420p,settb=AVTB,fps=${FPS}[v${i}]`).join(';') + ';';
+      let prev = 'v0';
+      let offset = durs[0] - XF; // 最初のxfade開始位置
+      for (let i = 1; i < n; i++) {
+        const out = i === n - 1 ? 'vout' : `x${i}`;
+        chain += `[${prev}][v${i}]xfade=transition=fade:duration=${XF}:offset=${offset.toFixed(3)}[${out}];`;
+        prev = out;
+        offset += durs[i] - XF; // 次のxfade開始位置（重なり分を差し引きつつ累積）
+      }
+      videoFilter = chain.replace(/;$/, '');
+    }
+
+    if (useXfade && bgm) {
       await run([
-        '-f', 'concat', '-safe', '0', '-i', listPath,
-        '-i', bgm,
+        ...vInputs, '-i', bgm,
         '-filter_complex',
-          `[1:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=0.6[a]`,
-        '-map', '0:v', '-map', '[a]',
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+          `${videoFilter};[${n}:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=0.6[a]`,
+        '-map', '[vout]', '-map', '[a]',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', bodySeconds.toFixed(3),
+        '-movflags', '+faststart', '-y', outPath,
+      ]);
+    } else if (useXfade) {
+      await run([
+        ...vInputs,
+        '-filter_complex', videoFilter,
+        '-map', '[vout]',
+        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-t', bodySeconds.toFixed(3),
         '-movflags', '+faststart', '-y', outPath,
       ]);
     } else {
-      // 無音で連結（再エンコードして faststart 付与）
-      await run([
-        '-f', 'concat', '-safe', '0', '-i', listPath,
-        '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', outPath,
-      ]);
+      // セグメント1枚: xfade不要。単体を再エンコード（+BGM）。
+      const listPath = join(tmp, 'list.txt');
+      writeFileSync(listPath, segs.map(s => `file '${s.replace(/\\/g, '/')}'`).join('\n'), 'utf8');
+      if (bgm) {
+        await run([
+          '-f', 'concat', '-safe', '0', '-i', listPath, '-i', bgm,
+          '-filter_complex', `[1:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=0.6[a]`,
+          '-map', '0:v', '-map', '[a]',
+          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+          '-movflags', '+faststart', '-y', outPath,
+        ]);
+      } else {
+        await run([
+          '-f', 'concat', '-safe', '0', '-i', listPath,
+          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', outPath,
+        ]);
+      }
     }
 
-    return { path: outPath, seconds: bodySeconds, slides: slideCount, bgm: !!bgm };
+    return { path: outPath, seconds: Math.round(bodySeconds), slides: slideCount, bgm: !!bgm };
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch {}
   }

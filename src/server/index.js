@@ -12,7 +12,7 @@ import { generateArticle, generateArticles, appendCta, listChannels, CHANNEL_PRO
 import { writeArticle, ACTIONS as ARTICLE_ACTIONS } from '../generate/articleWriter.js';
 import { generateAdCopies, listAdFormats, AD_FORMATS } from '../generate/adCopy.js';
 import { generateAdVideo } from '../generate/adVideo.js';
-import { listAdVideoTemplates, listAdVideoAspects } from '../generate/adVideoTemplates.js';
+import { listAdVideoTemplates, listAdVideoAspects, listAdVideoTransitions } from '../generate/adVideoTemplates.js';
 import { generateSlideshow } from '../generate/video.js';
 import { extractSlideFrames } from '../generate/extractFrames.js';
 import { qrDataUrl } from '../generate/qr.js';
@@ -557,7 +557,7 @@ app.post('/api/generate/ad-copy', async (req, res) => {
 });
 
 // --- 広告動画（テンプレート型 + 既存スライドショーエンジンで合成） ---
-app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects() }));
+app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions() }));
 // body: { store_id, template, aspect?, campaign_id?, form_slug?, extra?, image_urls[], per? , auto_bgm?, bgm_url? }
 app.post('/api/generate/ad-video', async (req, res) => {
   const b = req.body || {};
@@ -584,13 +584,14 @@ app.post('/api/generate/ad-video', async (req, res) => {
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
       images, autoBgm, bgmPath,
+      transition: b.transition || 'fade', opening: b.opening !== false,
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;
     const url = await saveAssetFile(rel, readFileSync(r.path), 'video/mp4');
     try { rmSync(r.path, { force: true }); } catch {}
     const asset = await db.createAsset({ store_id: store.id, campaign_id: campaign?.id || null, kind: 'gen_video',
-      url, meta: { seconds: r.seconds, slides: r.slides, bgm: r.bgm, ctaUrl, ad: true, template: r.template, aspect: r.aspect } });
-    ok(res, { asset, videoUrl: asset.url, seconds: r.seconds, slides: r.slides, bgm: r.bgm, template: r.template, aspect: r.aspect, captions: r.captions });
+      url, meta: { seconds: r.seconds, slides: r.slides, bgm: r.bgm, ctaUrl, ad: true, template: r.template, aspect: r.aspect, transition: r.transition } });
+    ok(res, { asset, videoUrl: asset.url, seconds: r.seconds, slides: r.slides, bgm: r.bgm, template: r.template, aspect: r.aspect, transition: r.transition, captions: r.captions });
   } catch (e) {
     bad(res, 500, '広告動画の生成に失敗しました: ' + (e.message || e));
   }

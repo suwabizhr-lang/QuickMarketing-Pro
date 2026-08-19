@@ -111,6 +111,23 @@ async function buildCta({ ctaUrl, ctaLabel, dur, tmp, w = W, h = H }) {
   return seg;
 }
 
+// オープニングのブランド面（ブランドカラー背景 + 店名を中央大きめに）。掴みの「誰の広告か」を明示。
+async function buildOpening({ storeName, brandColor, dur, tmp, w = W, h = H }) {
+  const seg = join(tmp, 'seg_open.mp4');
+  const telop = join(tmp, 'telop_open.png');
+  // ブランドカラーが濃いと黒文字が沈むので、telopは白文字＋黒縁(style:none)で視認性を確保
+  writeFileSync(telop, await telopPng({ text: storeName || '', position: 'center', style: 'none', fontSize: Math.round(Math.min(w, h) * 0.09), width: w, height: h }));
+  const args = [
+    '-f', 'lavfi', '-t', String(dur), '-i', `color=c=${(brandColor || '#FFE600').replace('#', '')}:s=${w}x${h}`,
+    '-i', telop,
+    '-filter_complex', `[0:v][1:v]overlay=0:0,format=yuv420p[v]`,
+    '-map', '[v]', '-r', String(FPS), '-t', String(dur),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
+  ];
+  await run(args);
+  return seg;
+}
+
 /**
  * スライドショー生成。
  * @param {object} o
@@ -129,6 +146,8 @@ export async function generateSlideshow({
   storeId, brandColor = '#FFE600', ctaUrl, ctaLabel = 'この店に今すぐ査定',
   images = [], captions = [], perSlide = 4, autoBgm = true, bgmPath = null,
   width = W, height = H, // 比率対応: 9:16=1080x1920 / 1:1=1080x1080 / 16:9=1920x1080
+  transition = 'fade',   // スライド間xfadeの種類（fade/dissolve/slideleft/wipeleft/...）
+  openingText = null,    // 指定時、冒頭にブランド面(店名)カットを差し込む
 }) {
   const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
@@ -142,6 +161,12 @@ export async function generateSlideshow({
     const durs = [];
     const ctaDur = 5;
     const pushSeg = (seg, d) => { segs.push(seg); durs.push(d); };
+
+    // オープニングのブランド面（先頭）
+    if (openingText) {
+      const openDur = 2;
+      pushSeg(await buildOpening({ storeName: openingText, brandColor, dur: openDur, tmp, w, h }), openDur);
+    }
 
     if (images.length > 0) {
       // 写真あり: 写真ごとに1スライド。テロップは対応する captions[i]（無ければ空）。
@@ -189,11 +214,12 @@ export async function generateSlideshow({
     if (useXfade) {
       // 各入力を fps 揃え＆フォーマット統一 → 順に xfade。offset は「累積表示尺 − 累積XF」。
       let chain = segs.map((_, i) => `[${i}:v]format=yuv420p,settb=AVTB,fps=${FPS}[v${i}]`).join(';') + ';';
+      const tr = transition || 'fade';
       let prev = 'v0';
       let offset = durs[0] - XF; // 最初のxfade開始位置
       for (let i = 1; i < n; i++) {
         const out = i === n - 1 ? 'vout' : `x${i}`;
-        chain += `[${prev}][v${i}]xfade=transition=fade:duration=${XF}:offset=${offset.toFixed(3)}[${out}];`;
+        chain += `[${prev}][v${i}]xfade=transition=${tr}:duration=${XF}:offset=${offset.toFixed(3)}[${out}];`;
         prev = out;
         offset += durs[i] - XF; // 次のxfade開始位置（重なり分を差し引きつつ累積）
       }

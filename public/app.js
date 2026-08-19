@@ -50,6 +50,7 @@ let AD_FORMATS = []; // 広告フォーマット定義
     $('avd_template').innerHTML = avt.templates.map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
     $('avd_aspect').innerHTML = avt.aspects.map(a =>
       `<option value="${a.key}" ${a.status !== 'ready' ? 'disabled' : ''}>${escapeHtml(a.label)}${a.status !== 'ready' ? '（準備中）' : ''}</option>`).join('');
+    $('avd_transition').innerHTML = (avt.transitions || []).map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
 
     $('pb_campaign').addEventListener('change', () => loadPublishBoard($('pb_campaign').value));
 
@@ -803,6 +804,7 @@ async function genAdVideo() {
       store_id: state.store.id, template: $('avd_template').value, aspect: $('avd_aspect').value || '9:16',
       campaign_id: $('avd_campaign').value || null, form_slug: $('avd_form').value || null,
       extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], auto_bgm: $('avd_bgm_on').checked,
+      transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');
     $('avd_out').innerHTML = `✅ ${r.seconds}秒 / スライド${r.slides}枚 / 比率${escapeHtml(r.aspect)} / BGM${r.bgm ? 'あり' : 'なし'}<br>

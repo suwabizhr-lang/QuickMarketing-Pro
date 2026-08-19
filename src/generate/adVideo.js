@@ -55,19 +55,20 @@ function fallbackCaptions({ store, campaign, scenes }) {
 }
 
 // メイン。広告動画を生成して { videoUrl, seconds, ... } を返す（生成物は data/assets/<store> に保存）。
-export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], bgmPath = null, autoBgm = true }) {
+export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], bgmPath = null, autoBgm = true, transition = 'fade', opening = true }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
   const captions = await buildCaptions({ store, campaign, template, style, extra });
   // シーン数に合わせて1枚あたり秒数を決める（テンプレの平均尺）。写真が少なければ既存ロジックが単色/ループで補完。
   const avgPer = Math.round(template.scenes.reduce((a, s) => a + s.seconds, 0) / template.scenes.length) || 4;
 
-  // 比率のW/Hをエンジンに渡す（9:16/1:1/16:9すべて対応）。
+  // 比率のW/Hをエンジンに渡す（9:16/1:1/16:9すべて対応）。opening=trueで冒頭に店名ブランド面。
   const result = await generateSlideshow({
     storeId: store.id, brandColor: store.brand_color, ctaUrl,
     ctaLabel: ctaLabel || 'この店に今すぐ査定',
     images, captions, perSlide: Math.max(2, Math.min(6, avgPer)),
     autoBgm, bgmPath, width: asp.w, height: asp.h,
+    transition, openingText: opening ? (store.name || null) : null,
   });
-  return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', captions };
+  return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', transition, captions };
 }

@@ -44,6 +44,21 @@ export const AD_VIDEO_TEMPLATES = {
   },
 };
 
+// スライド間トランジションの種類（ffmpeg xfade の transition 名にそのまま渡す）。
+// UIはこの一覧を読む。将来は circleopen/pixelize 等をここに足すだけで増える。
+export const AD_VIDEO_TRANSITIONS = {
+  fade: { label: 'フェード（標準）' },
+  dissolve: { label: 'ディゾルブ（溶ける）' },
+  slideleft: { label: 'スライド（左へ流れる）' },
+  wipeleft: { label: 'ワイプ（左から拭う）' },
+  smoothleft: { label: 'スムーズスライド' },
+  circleopen: { label: 'サークル（円で開く）' },
+};
+export function listAdVideoTransitions() {
+  return Object.entries(AD_VIDEO_TRANSITIONS).map(([key, v]) => ({ key, label: v.label }));
+}
+export function isValidTransition(key) { return !!AD_VIDEO_TRANSITIONS[key]; }
+
 export function listAdVideoTemplates() {
   return Object.entries(AD_VIDEO_TEMPLATES).sort((a, b) => a[1].order - b[1].order)
     .map(([key, t]) => ({ key, label: t.label, scenes: t.scenes.map(s => ({ kind: s.kind, seconds: s.seconds })) }));

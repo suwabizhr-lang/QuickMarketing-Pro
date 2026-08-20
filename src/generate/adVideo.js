@@ -55,7 +55,7 @@ function fallbackCaptions({ store, campaign, scenes }) {
 }
 
 // メイン。広告動画を生成して { videoUrl, seconds, ... } を返す（生成物は data/assets/<store> に保存）。
-export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, captions: userCaptions = null, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false }) {
+export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, captions: userCaptions = null, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false, narrVoice = null, narrSpeed = 1.05 }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
   // ユーザーが編集したテロップがあれば優先。空要素はAI/雛形で補完。無ければ全部AI生成。
@@ -73,7 +73,7 @@ export async function generateAdVideo({ store, campaign, templateKey, aspect = '
     autoBgm, bgmPath, width: asp.w, height: asp.h,
     transition, openingText: opening ? (store.name || null) : null,
     clips, clipSeconds, clipSpeeds, colorGrade, logoPath, logoPos, logoSize, // 動画クリップ素材＋個別秒数/速度/色補正/ロゴ(位置/サイズ)
-    showTelop, narration, // テロップ表示ON/OFF・AIナレーションON/OFF
+    showTelop, narration, narrVoice, narrSpeed, // テロップ表示ON/OFF・AIナレーションON/OFF・声/話速
   });
   return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', transition, captions };
 }

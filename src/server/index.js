@@ -587,7 +587,17 @@ app.post('/api/ad-video/captions', async (req, res) => {
   const captions = await buildCaptions({ store, campaign, template, style, extra: (b.extra || '').trim() });
   ok(res, { captions, scenes: template.scenes.map(s => s.kind) });
 });
-// body: { store_id, template, aspect?, campaign_id?, form_slug?, extra?, image_urls[], per? , auto_bgm?, bgm_url? }
+// ナレーションの声(日本語ラベル)→OpenAI TTS voice。話速ラベル→倍率。
+const NARR_VOICE_MAP = {
+  'female-bright': 'nova',   // 女性・明るい
+  'female-soft': 'shimmer',  // 女性・やわらか
+  'male-low': 'onyx',        // 男性・低め/落ち着き
+  'male': 'echo',            // 男性・標準
+  'neutral': 'alloy',        // 中性
+  'bright': 'fable',         // 明るい(中性)
+};
+const NARR_SPEED_MAP = { slow: 0.9, normal: 1.05, fast: 1.25 };
+// body: { store_id, template, aspect?, campaign_id?, form_slug?, extra?, image_urls[], per? , auto_bgm?, bgm_url?, narr_voice?, narr_speed? }
 app.post('/api/generate/ad-video', async (req, res) => {
   const b = req.body || {};
   if (await guardStore(req, res, b.store_id)) return;
@@ -641,6 +651,8 @@ app.post('/api/generate/ad-video', async (req, res) => {
       autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
       showTelop: b.show_telop !== false, narration: b.narration === true,
+      narrVoice: NARR_VOICE_MAP[b.narr_voice] || null, // 声のタイプ(日本語)→OpenAI voice
+      narrSpeed: NARR_SPEED_MAP[b.narr_speed] ?? 1.05, // 話速(ゆっくり/標準/早口)
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;
     const url = await saveAssetFile(rel, readFileSync(r.path), 'video/mp4');

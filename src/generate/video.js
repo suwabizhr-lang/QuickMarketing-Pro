@@ -233,6 +233,8 @@ export async function generateSlideshow({
   logoPos = 'top-right', logoSize = 'medium', // ロゴ位置(6択)・サイズ(small/medium/large)
   showTelop = true,      // テロップ文言を映像に焼くか
   narration = false,     // 各セグメントの文言をAI音声(TTS)で読み上げBGMに重ねるか
+  narrVoice = null,      // ナレーションの声（OpenAI voice名。null=既定）
+  narrSpeed = 1.05,      // ナレーションの話速（0.5〜2.0）
 }) {
   const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
@@ -333,7 +335,7 @@ export async function generateSlideshow({
         const t = (narrTexts[i] || '').trim();
         if (!t) continue;
         const mp3 = join(tmp, `narr${i}.mp3`);
-        const okSyn = await synthToFile(t, mp3, { speed: 1.05 });
+        const okSyn = await synthToFile(t, mp3, { voice: narrVoice || undefined, speed: narrSpeed });
         if (okSyn) narrClips.push({ file: mp3, startSec: useXfade ? (segStart[i] || 0) : 0 });
       }
     }

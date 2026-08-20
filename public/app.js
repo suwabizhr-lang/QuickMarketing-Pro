@@ -919,6 +919,8 @@ async function genAdVideo() {
       bgm_prompt: ($('avd_bgm_prompt') ? $('avd_bgm_prompt').value.trim() : '') || null,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
+      narr_voice: $('avd_narr_voice') ? $('avd_narr_voice').value : 'female-bright',
+      narr_speed: $('avd_narr_speed') ? $('avd_narr_speed').value : 'normal',
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');
     $('avd_out').innerHTML = `✅ ${r.seconds}秒 / スライド${r.slides}枚 / 比率${escapeHtml(r.aspect)} / BGM${r.bgm ? 'あり' : 'なし'}<br>

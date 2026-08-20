@@ -55,7 +55,7 @@ function fallbackCaptions({ store, campaign, scenes }) {
 }
 
 // メイン。広告動画を生成して { videoUrl, seconds, ... } を返す（生成物は data/assets/<store> に保存）。
-export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], clips = [], clipSeconds = 6, bgmPath = null, autoBgm = true, transition = 'fade', opening = true }) {
+export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], clips = [], clipSeconds = 6, bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
   const captions = await buildCaptions({ store, campaign, template, style, extra });
@@ -70,6 +70,7 @@ export async function generateAdVideo({ store, campaign, templateKey, aspect = '
     autoBgm, bgmPath, width: asp.w, height: asp.h,
     transition, openingText: opening ? (store.name || null) : null,
     clips, clipSeconds, // 動画クリップ素材（あればこちらが優先されリール生成）
+    showTelop, narration, // テロップ表示ON/OFF・AIナレーションON/OFF
   });
   return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', transition, captions };
 }

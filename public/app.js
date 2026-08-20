@@ -828,6 +828,7 @@ async function genAdVideo() {
       extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], clip_urls: clipUrls, clip_seconds: Number($('avd_clipsec').value) || 6,
       auto_bgm: $('avd_bgm_on').checked,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
+      show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');
     $('avd_out').innerHTML = `✅ ${r.seconds}秒 / スライド${r.slides}枚 / 比率${escapeHtml(r.aspect)} / BGM${r.bgm ? 'あり' : 'なし'}<br>

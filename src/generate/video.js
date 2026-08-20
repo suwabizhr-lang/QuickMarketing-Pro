@@ -10,6 +10,7 @@ import ffmpegPath from 'ffmpeg-static';
 import sharp from 'sharp';
 import { qrPngBuffer } from './qr.js';
 import { telopPng } from './telop.js';
+import { synthToFile, ttsEnabled } from './tts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const W = 1080, H = 1920, FPS = 30; // 既定は 9:16。generateSlideshow の width/height で上書き可。
@@ -76,20 +77,29 @@ async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, 
 
 // 動画クリップ1本をスライド化: 頭から dur 秒トリム → w×h に中央cover → テロップ焼き込み → 無音セグメントmp4。
 // リール/TikTok向け。元音は消す（BGMに差し替える前提）。
-async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H }) {
+async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H, showTelop = true }) {
   const seg = join(tmp, `clip${idx}.mp4`);
-  const telop = join(tmp, `telopc${idx}.png`);
-  writeFileSync(telop, await telopPng({ text: telopText || '', position: position || 'bottom', width: w, height: h }));
-  // scale=w×hにcover(=increase で短辺合わせ)→中央crop→fps/SAR統一→尺不足はtpadで最終フレーム複製し必ずdur秒に→テロップoverlay。
-  // tpad=stop_mode=clone: 素材が dur より短くても最後のフレームで埋め、xfade offset と実尺のズレを防ぐ。
-  const cover = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS},tpad=stop_mode=clone:stop_duration=${dur},trim=duration=${dur},format=yuv420p[bg];[bg][1:v]overlay=0:0,format=yuv420p[v]`;
-  const args = [
-    '-t', String(dur), '-i', clipPath,   // [0] 動画（頭から dur 秒）
-    '-i', telop,                          // [1] テロップ
-    '-filter_complex', `[0:v]${cover}`,
-    '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
-    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
-  ];
+  // 映像整形: scale cover→中央crop→fps/SAR統一→尺不足はtpadで最終フレーム複製→dur秒にtrim。
+  const cover = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS},tpad=stop_mode=clone:stop_duration=${dur},trim=duration=${dur},format=yuv420p`;
+  let args;
+  if (showTelop && (telopText || '').trim()) {
+    const telop = join(tmp, `telopc${idx}.png`);
+    writeFileSync(telop, await telopPng({ text: telopText, position: position || 'bottom', width: w, height: h }));
+    args = [
+      '-t', String(dur), '-i', clipPath, '-i', telop,
+      '-filter_complex', `[0:v]${cover}[bg];[bg][1:v]overlay=0:0,format=yuv420p[v]`,
+      '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
+    ];
+  } else {
+    // テロップ無し（ナレーションのみ等）
+    args = [
+      '-t', String(dur), '-i', clipPath,
+      '-filter_complex', `[0:v]${cover}[v]`,
+      '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
+      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
+    ];
+  }
   await run(args);
   return seg;
 }
@@ -169,6 +179,8 @@ export async function generateSlideshow({
   transition = 'fade',   // スライド間xfadeの種類（fade/dissolve/slideleft/wipeleft/...）
   openingText = null,    // 指定時、冒頭にブランド面(店名)カットを差し込む
   clips = [], clipSeconds = 6, // 動画クリップ素材（絶対パス配列）。各クリップを頭から clipSeconds 秒使う
+  showTelop = true,      // テロップ文言を映像に焼くか
+  narration = false,     // 各セグメントの文言をAI音声(TTS)で読み上げBGMに重ねるか
 }) {
   const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
@@ -180,13 +192,14 @@ export async function generateSlideshow({
   try {
     const segs = [];
     const durs = [];
+    const narrTexts = []; // 各セグメントのナレーション文言（無い区間は null）
     const ctaDur = 5;
-    const pushSeg = (seg, d) => { segs.push(seg); durs.push(d); };
+    const pushSeg = (seg, d, narr = null) => { segs.push(seg); durs.push(d); narrTexts.push(narr); };
 
     // オープニングのブランド面（先頭）
     if (openingText) {
       const openDur = 2;
-      pushSeg(await buildOpening({ storeName: openingText, brandColor, dur: openDur, tmp, w, h }), openDur);
+      pushSeg(await buildOpening({ storeName: openingText, brandColor, dur: openDur, tmp, w, h }), openDur, null);
     }
 
     if (clips.length > 0) {
@@ -194,8 +207,8 @@ export async function generateSlideshow({
       const cs = Math.max(2, Math.min(15, Number(clipSeconds) || 6));
       for (let i = 0; i < clips.length; i++) {
         pushSeg(await buildClipSlide({
-          clipPath: clips[i], telopText: captions[i] || '', position: 'bottom', dur: cs, tmp, idx: i, w, h,
-        }), cs);
+          clipPath: clips[i], telopText: captions[i] || '', position: 'bottom', dur: cs, tmp, idx: i, w, h, showTelop,
+        }), cs, captions[i] || null);
       }
     } else if (images.length > 0) {
       // 写真あり: 写真ごとに1スライド。テロップは対応する captions[i]（無ければ空）。
@@ -240,26 +253,68 @@ export async function generateSlideshow({
     // 映像フィルタ（xfadeチェーン）を組み立てる。BGM有無で map を切り替える。
     const vInputs = segs.flatMap(s => ['-i', s]);
     let videoFilter = '';
+    const segStart = []; // 各セグメントの最終動画上での開始時刻（xfade重なりを考慮）
     if (useXfade) {
       // 各入力を fps 揃え＆フォーマット統一 → 順に xfade。offset は「累積表示尺 − 累積XF」。
       let chain = segs.map((_, i) => `[${i}:v]format=yuv420p,settb=AVTB,fps=${FPS}[v${i}]`).join(';') + ';';
       const tr = transition || 'fade';
       let prev = 'v0';
       let offset = durs[0] - XF; // 最初のxfade開始位置
+      segStart[0] = 0;
       for (let i = 1; i < n; i++) {
         const out = i === n - 1 ? 'vout' : `x${i}`;
         chain += `[${prev}][v${i}]xfade=transition=${tr}:duration=${XF}:offset=${offset.toFixed(3)}[${out}];`;
+        segStart[i] = offset; // セグメントiは概ねこの時刻から表示される
         prev = out;
-        offset += durs[i] - XF; // 次のxfade開始位置（重なり分を差し引きつつ累積）
+        offset += durs[i] - XF;
       }
       videoFilter = chain.replace(/;$/, '');
     }
 
-    if (useXfade && bgm) {
+    // ナレーション音声（AI TTS）。各セグメントの文言を音声化し、segStart[i] から配置。無効時は空。
+    let narrClips = []; // { file, startSec }
+    if (narration && ttsEnabled() && useXfade) {
+      for (let i = 0; i < n; i++) {
+        const t = (narrTexts[i] || '').trim();
+        if (!t) continue;
+        const mp3 = join(tmp, `narr${i}.mp3`);
+        const okSyn = await synthToFile(t, mp3, { speed: 1.05 });
+        if (okSyn) narrClips.push({ file: mp3, startSec: segStart[i] || 0 });
+      }
+    }
+    const hasNarr = narrClips.length > 0;
+
+    if (useXfade && (bgm || hasNarr)) {
+      // オーディオ入力: [n]以降に BGM → ナレーション群 の順で -i する。
+      const audioInputs = [];
+      let ai = n; // 次の入力インデックス
+      let bgmIdx = -1;
+      if (bgm) { audioInputs.push('-i', bgm); bgmIdx = ai; ai++; }
+      const narrIdx = [];
+      for (const nc of narrClips) { audioInputs.push('-i', nc.file); narrIdx.push({ idx: ai, startSec: nc.startSec }); ai++; }
+
+      // オーディオフィルタ: BGMは音量下げ（ナレがある時は控えめ0.22、無ければ0.6）＋末尾フェードアウト。
+      // ナレは各 adelay で配置し amix。最後に全部を amix。
+      const aChains = [];
+      const mixLabels = [];
+      if (bgm) {
+        const bgmVol = hasNarr ? 0.22 : 0.6;
+        aChains.push(`[${bgmIdx}:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=${bgmVol}[abgm]`);
+        mixLabels.push('[abgm]');
+      }
+      narrIdx.forEach((nn, k) => {
+        const delayMs = Math.round(nn.startSec * 1000);
+        aChains.push(`[${nn.idx}:a]adelay=${delayMs}|${delayMs},volume=1.6[an${k}]`);
+        mixLabels.push(`[an${k}]`);
+      });
+      const mix = mixLabels.length > 1
+        ? `${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=first:dropout_transition=0,volume=${mixLabels.length}[a]`
+        : `${mixLabels[0]}anull[a]`;
+      const aFilter = aChains.concat(mix).join(';');
+
       await run([
-        ...vInputs, '-i', bgm,
-        '-filter_complex',
-          `${videoFilter};[${n}:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=0.6[a]`,
+        ...vInputs, ...audioInputs,
+        '-filter_complex', `${videoFilter};${aFilter}`,
         '-map', '[vout]', '-map', '[a]',
         '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', bodySeconds.toFixed(3),
         '-movflags', '+faststart', '-y', outPath,
@@ -292,7 +347,7 @@ export async function generateSlideshow({
       }
     }
 
-    return { path: outPath, seconds: Math.round(bodySeconds), slides: slideCount, bgm: !!bgm };
+    return { path: outPath, seconds: Math.round(bodySeconds), slides: slideCount, bgm: !!bgm, narration: hasNarr };
   } finally {
     try { rmSync(tmp, { recursive: true, force: true }); } catch {}
   }

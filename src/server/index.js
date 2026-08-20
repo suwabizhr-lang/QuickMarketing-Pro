@@ -589,13 +589,14 @@ app.post('/api/generate/ad-video', async (req, res) => {
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
       images, clips, clipSeconds: Number(b.clip_seconds) || 6, autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
+      showTelop: b.show_telop !== false, narration: b.narration === true,
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;
     const url = await saveAssetFile(rel, readFileSync(r.path), 'video/mp4');
     try { rmSync(r.path, { force: true }); } catch {}
     const asset = await db.createAsset({ store_id: store.id, campaign_id: campaign?.id || null, kind: 'gen_video',
-      url, meta: { seconds: r.seconds, slides: r.slides, bgm: r.bgm, ctaUrl, ad: true, template: r.template, aspect: r.aspect, transition: r.transition } });
-    ok(res, { asset, videoUrl: asset.url, seconds: r.seconds, slides: r.slides, bgm: r.bgm, template: r.template, aspect: r.aspect, transition: r.transition, captions: r.captions });
+      url, meta: { seconds: r.seconds, slides: r.slides, bgm: r.bgm, narration: r.narration, ctaUrl, ad: true, template: r.template, aspect: r.aspect, transition: r.transition } });
+    ok(res, { asset, videoUrl: asset.url, seconds: r.seconds, slides: r.slides, bgm: r.bgm, narration: r.narration, template: r.template, aspect: r.aspect, transition: r.transition, captions: r.captions });
   } catch (e) {
     bad(res, 500, '広告動画の生成に失敗しました: ' + (e.message || e));
   }

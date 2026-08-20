@@ -216,16 +216,16 @@ export async function generateSlideshow({
         const framePng = join(tmp, `frame${i}.png`);
         await coverToFrame(images[i], framePng, w, h);
         pushSeg(await buildSlide({
-          imgPath: framePng, telopText: captions[i] || '', position: 'bottom', dur: perSlide, tmp, idx: i, w, h,
-        }), perSlide);
+          imgPath: framePng, telopText: showTelop ? (captions[i] || '') : '', position: 'bottom', dur: perSlide, tmp, idx: i, w, h,
+        }), perSlide, captions[i] || null);
       }
     } else if (captions.length > 0) {
       // 写真ゼロ・テロップ複数: テロップ1行ごとに単色スライドを作る（3行なら3スライド）。
       for (let i = 0; i < captions.length; i++) {
         const d = Math.max(3, perSlide);
         pushSeg(await buildSlide({
-          imgPath: null, brandColor, telopText: captions[i] || '', position: 'center', dur: d, tmp, idx: i, w, h,
-        }), d);
+          imgPath: null, brandColor, telopText: showTelop ? (captions[i] || '') : '', position: 'center', dur: d, tmp, idx: i, w, h,
+        }), d, captions[i] || null);
       }
     } else {
       // 何も無い: 単色スライド1枚

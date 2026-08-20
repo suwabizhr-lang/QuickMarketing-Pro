@@ -52,6 +52,7 @@ let AD_FORMATS = []; // 広告フォーマット定義
     $('avd_aspect').innerHTML = avt.aspects.map(a =>
       `<option value="${a.key}" ${a.status !== 'ready' ? 'disabled' : ''}>${escapeHtml(a.label)}${a.status !== 'ready' ? '（準備中）' : ''}</option>`).join('');
     $('avd_transition').innerHTML = (avt.transitions || []).map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
+    if (avt.aiBgm) $('avd_bgm_ai_box').style.display = 'block'; // AI BGM生成（ElevenLabsキーがある時だけ）
 
     $('pb_campaign').addEventListener('change', () => loadPublishBoard($('pb_campaign').value));
 
@@ -902,6 +903,8 @@ async function genAdVideo() {
       captions: [...document.querySelectorAll('.avd-cap')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => el.value.trim()).filter(x=>x).length
         ? [...document.querySelectorAll('.avd-cap')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => el.value.trim()) : undefined,
       auto_bgm: $('avd_bgm_on').checked, bgm_url: $('avd_bgm').value || null,
+      bgm_mode: ($('avd_bgm_ai') && $('avd_bgm_ai').checked) ? 'ai' : 'select',
+      bgm_prompt: ($('avd_bgm_prompt') ? $('avd_bgm_prompt').value.trim() : '') || null,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
     });

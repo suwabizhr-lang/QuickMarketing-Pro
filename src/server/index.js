@@ -23,6 +23,7 @@ import { startScheduler, runScheduleNow } from '../scheduler.js';
 import { registerAuth, ownerId, authEnabled } from '../auth.js';
 import * as storage from '../storage.js';
 import { sendSubmissionNotice, mailerEnabled } from '../mailer.js';
+import { musicgenToFile, musicgenEnabled } from '../generate/musicgen.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -573,7 +574,7 @@ app.post('/api/generate/ad-copy', async (req, res) => {
 });
 
 // --- 広告動画（テンプレート型 + 既存スライドショーエンジンで合成） ---
-app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions() }));
+app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions(), aiBgm: musicgenEnabled() }));
 // テロップ文言だけをAI生成して返す（ユーザーが編集してから動画化するため）。
 app.post('/api/ad-video/captions', async (req, res) => {
   const b = req.body || {};
@@ -602,11 +603,23 @@ app.post('/api/generate/ad-video', async (req, res) => {
   const clips = [];
   if (Array.isArray(b.clip_urls)) for (const u of b.clip_urls.slice(0, 3)) { const p = await resolveToLocal(u); if (p) clips.push(p); }
 
-  // BGM: 既存 /api/generate/video と同じ解決
+  // BGM: bgm_mode='ai'ならElevenLabsで生成 / それ以外は指定URL→登録先頭。auto_bgm=falseで無音。
   const autoBgm = b.auto_bgm !== false;
   let bgmPath = null;
   if (autoBgm) {
-    if (b.bgm_url) bgmPath = await resolveToLocal(b.bgm_url);
+    if (b.bgm_mode === 'ai' && musicgenEnabled()) {
+      // 想定尺ぶん（クリップ合計 or 25秒）のBGMを生成。生成物はStorageにも保存し再利用可能に。
+      const est = Array.isArray(b.clip_seconds_list) && b.clip_seconds_list.length
+        ? b.clip_seconds_list.reduce((a, v) => a + (Number(v) || 6), 0) + 5 : 25;
+      const tmpMp3 = join(tmpDir(), `aibgm-${randomUUID()}.mp3`);
+      const prompt = (b.bgm_prompt || '').trim() || `${store.name}の店舗広告向け、明るくキャッチーなインストゥルメンタルBGM`;
+      const okGen = await musicgenToFile(prompt, tmpMp3, { lengthMs: est * 1000 });
+      if (okGen) {
+        bgmPath = tmpMp3;
+        try { const url = await saveAssetFile(`${store.id}/bgm/aibgm-${randomUUID().slice(0, 6)}.mp3`, readFileSync(tmpMp3), 'audio/mpeg'); await db.createAsset({ store_id: store.id, kind: 'bgm', url, meta: { name: 'AI生成BGM', ai: true } }); } catch {}
+      }
+    }
+    if (!bgmPath && b.bgm_url) bgmPath = await resolveToLocal(b.bgm_url);
     if (!bgmPath) { const list = await db.listAssets(store.id, 'bgm'); if (list[0]) bgmPath = await resolveToLocal(list[0].url); }
   }
 

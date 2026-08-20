@@ -390,6 +390,11 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <select id="avd_bgm"></select>
       <label>BGMを追加（著作権フリーの音源をアップロード）</label>
       <input id="avd_bgm_file" type="file" accept="audio/*" onchange="avdUploadBgm()">
+      <div id="avd_bgm_ai_box" style="display:none;margin:8px 0;padding:10px;border:1px solid #eee;border-radius:8px">
+        <label class="switch" style="margin:0"><input type="checkbox" id="avd_bgm_ai" style="width:auto" onchange="document.getElementById('avd_bgm_prompt').style.display=this.checked?'block':'none'"> AIでBGMを生成する（商用利用OK）</label>
+        <input id="avd_bgm_prompt" placeholder="例：明るくキャッチーなアップテンポ／落ち着いた上品なピアノ など雰囲気を指定（空欄は自動）" style="display:none;margin-top:6px">
+        <div class="muted" style="font-size:12px;margin-top:4px">ONにすると、上の登録音源より優先してAIが動画尺に合わせたBGMを自動生成します。</div>
+      </div>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_bgm_on" checked style="width:auto"> BGMを付ける</label>
 
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に店名のオープニング面を入れる</label>

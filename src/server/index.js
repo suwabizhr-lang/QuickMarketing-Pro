@@ -21,6 +21,7 @@ import { publishToChannel } from '../publish/index.js';
 import { startScheduler, runScheduleNow } from '../scheduler.js';
 import { registerAuth, ownerId, authEnabled } from '../auth.js';
 import * as storage from '../storage.js';
+import { sendSubmissionNotice, mailerEnabled } from '../mailer.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -928,7 +929,19 @@ async function notifyDelivery({ store, form, payload, submissionId }) {
   if (d.webhook_url) {
     await fetch(d.webhook_url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ store: store.name, payload, submissionId }) }).catch(() => {});
   }
-  if (d.email) console.log(`[メール送信先 ${d.email}] へ通知（SMTP未設定のため記録のみ）:\n${text}`);
+  if (d.email) {
+    if (mailerEnabled()) {
+      const detailUrl = `${base}/admin/submissions?form=${form.id}#${submissionId}`;
+      const okSent = await sendSubmissionNotice(d.email, {
+        storeName: store.name, contact: payload.contact || {}, item: payload.item || {},
+        photoCount: (payload.photos || []).length, detailUrl,
+      });
+      if (!okSent) console.error(`[メール通知] 送信失敗 to=${d.email}`);
+    } else {
+      // Resend未設定時は従来どおりログ記録（後方互換）
+      console.log(`[メール送信先 ${d.email}] へ通知（RESEND_API_KEY未設定のため記録のみ）:\n${text}`);
+    }
+  }
 }
 
 // 公開フォームHTML（写真撮影+連絡先+商品情報。店舗別・キャンペーン反映・業態ライセンス表示）

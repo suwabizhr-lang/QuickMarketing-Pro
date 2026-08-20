@@ -108,7 +108,10 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
         <div><label>電話</label><input id="s_tel" placeholder="03-xxxx-xxxx"></div>
       </div>
       <div id="s_licenses"></div>
-      <div class="row"><div><label>ブランドカラー</label><input id="s_color" type="color" value="#FFE600"></div></div>
+      <div class="row">
+        <div><label>ブランドカラー</label><input id="s_color" type="color" value="#FFE600"></div>
+        <div><label>店舗ロゴ（動画に合成・任意）</label><input id="s_logo" type="file" accept="image/*" onchange="uploadLogo()"><span id="s_logo_out" class="muted"></span></div>
+      </div>
       <button class="y" id="s_save" onclick="saveStore()">店舗を作成</button>
       <span id="s_delbox" style="display:none;margin-left:10px">
         <button class="sm ghost" onclick="deleteStore(false)">この店舗を削除</button>
@@ -355,7 +358,13 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <input id="avd_clips" type="file" accept="video/*" multiple onchange="avdUploadClips()">
       <div class="muted">各クリップは頭から数秒を使い、縦型に切り出してテロップ＋BGMを乗せます。元の音声は消えます。</div>
       <div class="thumbs" id="avd_cliplist"></div>
-      <label>1クリップあたりの秒数</label><input id="avd_clipsec" type="number" min="2" max="15" value="6" style="max-width:120px">
+      <label>1クリップあたりの秒数（既定・各クリップで個別変更可）</label><input id="avd_clipsec" type="number" min="2" max="15" value="6" style="max-width:120px">
+      <div class="row" style="margin-top:8px">
+        <div><label>色補正（フィルター）</label><select id="avd_grade">
+          <option value="none">補正なし</option><option value="bright">明るく</option><option value="vivid">鮮やか</option><option value="warm">暖色</option><option value="cool">寒色</option><option value="cinema">シネマ調</option>
+        </select></div>
+      </div>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_logo" style="width:auto"> 店舗ロゴを右上に表示（登録ビューでロゴ登録が必要）</label>
       <label style="margin-top:10px">写真を追加（複数可・動画クリップが無い場合に使用）</label>
       <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
       <div class="thumbs" id="avd_thumbs"></div>

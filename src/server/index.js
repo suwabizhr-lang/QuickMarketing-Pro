@@ -129,6 +129,20 @@ app.post('/api/store/:id', async (req, res) => {
   if (err) return bad(res, 400, err);
   ok(res, { store: await db.updateStore(cur.id, b) });
 });
+// 店舗ロゴのアップロード（動画のオープニング/CTAに合成）。base64 dataURL を受けて store.logo_url に保存。
+app.post('/api/store/:id/logo', async (req, res) => {
+  const { store, forbidden } = await getOwnedStore(req, req.params.id);
+  if (forbidden) return bad(res, 403, 'この店舗にはアクセスできません');
+  if (!store) return bad(res, 404, '店舗が見つかりません');
+  const m = /^data:image\/(png|jpe?g|webp)\;base64,(.+)$/i.exec(req.body?.data_url || '');
+  if (!m) return bad(res, 400, 'ロゴは png/jpeg/webp の dataURL で送ってください');
+  const ext = m[1].toLowerCase().replace('jpeg', 'jpg');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 5 * 1024 * 1024) return bad(res, 400, 'ロゴは5MBまでにしてください');
+  const url = await saveAssetFile(`${store.id}/logo/logo-${randomUUID().slice(0, 6)}.${ext}`, buf, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+  const updated = await db.updateStore(store.id, { logo_url: url });
+  ok(res, { store: updated, logo_url: url });
+});
 
 // 店舗の関連データ件数（削除ダイアログの表示用）
 app.get('/api/store/:id/relations', async (req, res) => {
@@ -583,11 +597,19 @@ app.post('/api/generate/ad-video', async (req, res) => {
     if (!bgmPath) { const list = await db.listAssets(store.id, 'bgm'); if (list[0]) bgmPath = await resolveToLocal(list[0].url); }
   }
 
+  // 各クリップ個別秒数（配列）/ 速度（配列）。単一数値も後方互換。
+  const clipSeconds = Array.isArray(b.clip_seconds_list) && b.clip_seconds_list.length ? b.clip_seconds_list.map(Number) : (Number(b.clip_seconds) || 6);
+  const clipSpeeds = Array.isArray(b.clip_speeds) ? b.clip_speeds.map(Number) : [];
+  const colorGrade = typeof b.color_grade === 'string' ? b.color_grade : 'none';
+  // ロゴ: use_logo=true かつ店舗にlogo_urlがあれば、ローカル解決してオーバーレイ。
+  let logoPath = null;
+  if (b.use_logo && store.logo_url) logoPath = await resolveToLocal(store.logo_url);
+
   try {
     const r = await generateAdVideo({
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
-      images, clips, clipSeconds: Number(b.clip_seconds) || 6, autoBgm, bgmPath,
+      images, clips, clipSeconds, clipSpeeds, colorGrade, logoPath, autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
       showTelop: b.show_telop !== false, narration: b.narration === true,
     });

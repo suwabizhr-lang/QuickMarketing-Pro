@@ -15,6 +15,17 @@ import { synthToFile, ttsEnabled } from './tts.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const W = 1080, H = 1920, FPS = 30; // 既定は 9:16。generateSlideshow の width/height で上書き可。
 const assetsRoot = join(__dirname, '..', '..', 'data', 'assets');
+
+// 色補正プリセット → ffmpeg eq/その他フィルタ断片。none は空（補正なし）。
+export const COLOR_GRADES = {
+  none: '',
+  bright: 'eq=brightness=0.08:contrast=1.06',
+  vivid: 'eq=saturation=1.35:contrast=1.08',
+  warm: 'eq=saturation=1.12,colorbalance=rm=0.10:gm=0.03:bm=-0.08',
+  cool: 'eq=saturation=1.08,colorbalance=rm=-0.08:gm=0.0:bm=0.12',
+  cinema: 'eq=contrast=1.18:saturation=0.9:gamma=0.95',
+};
+function gradeFilter(grade) { return COLOR_GRADES[grade] || ''; }
 const bgmDir = join(__dirname, '..', '..', 'assets', 'bgm'); // フリー音源を置く場所（任意）
 
 function run(args) {
@@ -77,30 +88,43 @@ async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, 
 
 // 動画クリップ1本をスライド化: 頭から dur 秒トリム → w×h に中央cover → テロップ焼き込み → 無音セグメントmp4。
 // リール/TikTok向け。元音は消す（BGMに差し替える前提）。
-async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H, showTelop = true }) {
+async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H, showTelop = true, speed = 1, grade = 'none', logoPath = null }) {
   const seg = join(tmp, `clip${idx}.mp4`);
-  // 映像整形: scale cover→中央crop→fps/SAR統一→尺不足はtpadで最終フレーム複製→dur秒にtrim。
-  const cover = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS},tpad=stop_mode=clone:stop_duration=${dur},trim=duration=${dur},format=yuv420p`;
-  let args;
+  const sp = Math.max(0.5, Math.min(2, Number(speed) || 1));
+  const srcDur = dur * sp; // 速度spなら素材は dur*sp 秒使うと出力 dur 秒になる
+  const speedF = sp !== 1 ? `,setpts=PTS/${sp}` : '';
+  const gradeF = gradeFilter(grade) ? ',' + gradeFilter(grade) : '';
+  // 映像整形: scale cover→中央crop→fps/SAR統一→(速度)→(色補正)→尺不足はtpad→dur秒にtrim。
+  const cover = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS}${speedF}${gradeF},tpad=stop_mode=clone:stop_duration=${dur},trim=duration=${dur},format=yuv420p`;
+
+  // オーバーレイ入力（テロップ・ロゴ）を組み立て
+  const inputs = ['-t', String(srcDur), '-i', clipPath];
+  const overlays = []; // {label, x, y}
+  let inIdx = 1;
   if (showTelop && (telopText || '').trim()) {
     const telop = join(tmp, `telopc${idx}.png`);
     writeFileSync(telop, await telopPng({ text: telopText, position: position || 'bottom', width: w, height: h }));
-    args = [
-      '-t', String(dur), '-i', clipPath, '-i', telop,
-      '-filter_complex', `[0:v]${cover}[bg];[bg][1:v]overlay=0:0,format=yuv420p[v]`,
-      '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
-    ];
-  } else {
-    // テロップ無し（ナレーションのみ等）
-    args = [
-      '-t', String(dur), '-i', clipPath,
-      '-filter_complex', `[0:v]${cover}[v]`,
-      '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
-      '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
-    ];
+    inputs.push('-i', telop); overlays.push({ idx: inIdx, x: '0', y: '0' }); inIdx++;
   }
-  await run(args);
+  if (logoPath) {
+    inputs.push('-i', logoPath); overlays.push({ idx: inIdx, x: `main_w-overlay_w-${Math.round(w * 0.04)}`, y: `${Math.round(h * 0.03)}`, logo: true, size: Math.round(w * 0.22) }); inIdx++;
+  }
+
+  // filter: [0]cover→[base]、overlayを順に重ねる。ロゴは事前にscale。
+  let fc = `[0:v]${cover}[base]`;
+  let prev = 'base';
+  overlays.forEach((ov, k) => {
+    const out = k === overlays.length - 1 ? 'v' : `ov${k}`;
+    if (ov.logo) {
+      fc += `;[${ov.idx}:v]scale=${ov.size}:-1[lg${k}];[${prev}][lg${k}]overlay=${ov.x}:${ov.y},format=yuv420p[${out}]`;
+    } else {
+      fc += `;[${prev}][${ov.idx}:v]overlay=${ov.x}:${ov.y},format=yuv420p[${out}]`;
+    }
+    prev = out;
+  });
+  if (overlays.length === 0) fc = `[0:v]${cover}[v]`;
+
+  await run([...inputs, '-filter_complex', fc, '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg]);
   return seg;
 }
 
@@ -178,7 +202,10 @@ export async function generateSlideshow({
   width = W, height = H, // 比率対応: 9:16=1080x1920 / 1:1=1080x1080 / 16:9=1920x1080
   transition = 'fade',   // スライド間xfadeの種類（fade/dissolve/slideleft/wipeleft/...）
   openingText = null,    // 指定時、冒頭にブランド面(店名)カットを差し込む
-  clips = [], clipSeconds = 6, // 動画クリップ素材（絶対パス配列）。各クリップを頭から clipSeconds 秒使う
+  clips = [], clipSeconds = 6, // 動画クリップ素材（絶対パス配列）。clipSecondsは数値 or 配列(各クリップ個別秒数)
+  clipSpeeds = [],       // 各クリップの再生速度（0.5〜2倍）。省略時は等速
+  colorGrade = 'none',   // 色補正プリセット（none/bright/vivid/warm/cool/cinema）
+  logoPath = null,       // 店舗ロゴ（各クリップ/スライドの右上に合成）
   showTelop = true,      // テロップ文言を映像に焼くか
   narration = false,     // 各セグメントの文言をAI音声(TTS)で読み上げBGMに重ねるか
 }) {
@@ -203,11 +230,13 @@ export async function generateSlideshow({
     }
 
     if (clips.length > 0) {
-      // 動画クリップあり（リール/TikTok向け）: 各クリップを縦化＋テロップ焼き込み。テロップは captions[i]。
-      const cs = Math.max(2, Math.min(15, Number(clipSeconds) || 6));
+      // 動画クリップあり（リール/TikTok向け）: 各クリップを縦化＋テロップ焼き込み＋個別秒数/速度/色補正/ロゴ。
+      const clampSec = v => Math.max(2, Math.min(15, Number(v) || 6));
       for (let i = 0; i < clips.length; i++) {
+        const cs = Array.isArray(clipSeconds) ? clampSec(clipSeconds[i] ?? clipSeconds[0] ?? 6) : clampSec(clipSeconds);
         pushSeg(await buildClipSlide({
           clipPath: clips[i], telopText: captions[i] || '', position: 'bottom', dur: cs, tmp, idx: i, w, h, showTelop,
+          speed: clipSpeeds[i], grade: colorGrade, logoPath,
         }), cs, captions[i] || null);
       }
     } else if (images.length > 0) {

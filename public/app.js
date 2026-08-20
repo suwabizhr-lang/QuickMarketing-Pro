@@ -266,6 +266,18 @@ function renderLicenses() {
   $('s_licenses').innerHTML = (bt?.required_licenses || []).map(l =>
     `<label>${escapeHtml(l.label)}${l.hint ? `（${escapeHtml(l.hint)}）` : ''} *</label><input id="lic_${l.key}" placeholder="${escapeHtml(l.hint || '')}">`).join('');
 }
+// 店舗ロゴのアップロード（動画に合成）。店舗が保存済みである必要あり。
+async function uploadLogo() {
+  if (!state.store) { alert('先に店舗を作成/選択してください'); $('s_logo').value = ''; return; }
+  const f = $('s_logo').files?.[0]; if (!f) return;
+  $('s_logo_out').textContent = 'アップロード中…';
+  try {
+    const r = await api(`/api/store/${state.store.id}/logo`, 'POST', { data_url: await fileToDataUrl(f) });
+    state.store.logo_url = r.logo_url;
+    $('s_logo_out').innerHTML = ` ✅ 登録しました`;
+  } catch (e) { $('s_logo_out').textContent = ''; alert('ロゴのアップロード失敗: ' + e.message); }
+  finally { $('s_logo').value = ''; }
+}
 async function saveStore() {
   try {
     const btId = $('s_bt').value;
@@ -814,18 +826,36 @@ async function avdUploadClips() {
 }
 function renderAdClips() {
   $('avd_cliplist').innerHTML = (state.adClips || []).map((c, i) =>
-    `<span class="pill">🎬 ${escapeHtml(c.name || 'clip' + (i + 1))} <button class="sm ghost" style="padding:0 6px" onclick="removeAdClip(${i})">×</button></span>`).join('');
+    `<div style="display:flex;align-items:center;gap:8px;margin:4px 0;flex-wrap:wrap">
+      <span class="pill">🎬 ${escapeHtml(c.name || 'clip' + (i + 1))}</span>
+      <label style="font-size:12px">秒 <input class="avd-clipsec" data-i="${i}" type="number" min="2" max="15" value="${c.sec || 6}" style="width:56px"></label>
+      <label style="font-size:12px">速度 <select class="avd-clipspd" data-i="${i}" style="width:70px">
+        <option value="0.5"${c.spd==0.5?' selected':''}>0.5x</option>
+        <option value="1"${(!c.spd||c.spd==1)?' selected':''}>1x</option>
+        <option value="1.5"${c.spd==1.5?' selected':''}>1.5x</option>
+        <option value="2"${c.spd==2?' selected':''}>2x</option>
+      </select></label>
+      <button class="sm ghost" style="padding:0 8px" onclick="removeAdClip(${i})">×</button>
+    </div>`).join('');
 }
 function removeAdClip(i) { state.adClips.splice(i, 1); renderAdClips(); }
 async function genAdVideo() {
   if (!requireStore()) return;
   const clipUrls = (state.adClips || []).map(c => c.url);
+  // 各クリップの個別秒数・速度を収集（クリップ数ぶん）
+  const secList = [...document.querySelectorAll('.avd-clipsec')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => Number(el.value) || 6);
+  const spdList = [...document.querySelectorAll('.avd-clipspd')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => Number(el.value) || 1);
   $('avd_out').style.display = 'block'; $('avd_out').style.color = ''; $('avd_out').textContent = '広告動画を生成中…（動画クリップありは1分ほどかかる場合があります）';
   try {
     const r = await api('/api/generate/ad-video', 'POST', {
       store_id: state.store.id, template: $('avd_template').value, aspect: $('avd_aspect').value || '9:16',
       campaign_id: $('avd_campaign').value || null, form_slug: $('avd_form').value || null,
-      extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], clip_urls: clipUrls, clip_seconds: Number($('avd_clipsec').value) || 6,
+      extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], clip_urls: clipUrls,
+      clip_seconds: Number($('avd_clipsec').value) || 6,
+      clip_seconds_list: clipUrls.length ? secList : undefined,
+      clip_speeds: clipUrls.length ? spdList : undefined,
+      color_grade: $('avd_grade').value || 'none',
+      use_logo: $('avd_logo').checked,
       auto_bgm: $('avd_bgm_on').checked,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,

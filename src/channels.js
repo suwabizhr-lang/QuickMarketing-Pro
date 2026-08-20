@@ -41,13 +41,13 @@ export const CHANNEL_DRIVERS = {
   wordpress: {
     label: '自社HP / ブログ（WordPress）', order: 3,
     auto: {
-      supported: true, status: 'planned',
-      note: 'WordPress REST API + アプリケーションパスワードで下書き/公開投稿（実装予定）。',
+      supported: true, status: 'ready',
+      note: 'WordPress REST API + アプリケーションパスワードで下書き/公開投稿。WP管理画面 ユーザー>プロフィール>アプリケーションパスワード で発行。',
       fields: [
-        { key: 'site_url', label: 'サイトURL', type: 'url', required: true, hint: 'https://example.com' },
+        { key: 'site_url', label: 'サイトURL', type: 'url', required: true, hint: 'https://example.com（WordPressのURL）' },
         { key: 'username', label: 'ユーザー名', type: 'text', required: true },
-        { key: 'app_password', label: 'アプリケーションパスワード', type: 'password', required: true, hint: 'WPの「アプリケーションパスワード」で発行' },
-        { key: 'status', label: '投稿ステータス', type: 'select', required: false, options: ['draft', 'publish'], hint: '既定は下書き' },
+        { key: 'app_password', label: 'アプリケーションパスワード', type: 'password', required: true, hint: 'WPの「アプリケーションパスワード」で発行（ログインPWとは別）' },
+        { key: 'status', label: '投稿ステータス', type: 'select', required: false, options: ['draft', 'publish'], hint: '既定は下書き（安全）。公開なら publish' },
       ],
     },
     manual: {
@@ -120,7 +120,49 @@ export const CHANNEL_DRIVERS = {
       ],
     },
   },
+
+  // --- 手動投稿プリセット（自動APIは無い/未対応。生成物をコピーして各媒体へ人が投稿。投稿状態は記録できる） ---
+  // 共通の手動フィールド: 投稿/管理URL + メモ（手順やアカウント名）。
+  threads: { label: 'Threads', order: 10, ...manualOnly('プロフィール/投稿URL') },
+  tiktok: { label: 'TikTok', order: 11, ...manualOnly('アカウントURL') },
+  youtube: { label: 'YouTube（Shorts等）', order: 12, ...manualOnly('チャンネルURL') },
+  pinterest: { label: 'Pinterest', order: 13, ...manualOnly('プロフィールURL') },
+  hatena: { label: 'はてなブログ', order: 14, ...manualOnly('ブログURL') },
+  ameba: { label: 'Amebaブログ', order: 15, ...manualOnly('ブログURL') },
+  note: { label: 'note', order: 16, ...manualOnly('プロフィール/記事URL') },
+  wix: { label: 'Wix（ブログ）', order: 17, ...manualOnly('サイト管理URL') },
+  jimdo: { label: 'Jimdo', order: 18, ...manualOnly('サイト管理URL') },
+  peraichi: { label: 'ペライチ', order: 19, ...manualOnly('サイト管理URL') },
+  goo: { label: 'gooブログ', order: 20, ...manualOnly('ブログURL') },
+  livedoor: { label: 'livedoorブログ', order: 21, ...manualOnly('ブログURL') },
+  static_site: { label: '静的HP（手動更新）', order: 22, ...manualOnly('サイトURL') },
+
+  // 汎用: どんな媒体でもユーザーが自由に登録できる受け皿。
+  custom: {
+    label: 'その他（自由に追加）', order: 99,
+    auto: { supported: false, status: 'unsupported', note: '自動投稿はしません。生成物をコピーして手動で投稿する先として管理します。', fields: [] },
+    manual: {
+      fields: [
+        { key: 'media_name', label: '媒体名', type: 'text', required: true, hint: '例: 地域ポータル / 商店会サイト など' },
+        { key: 'post_url', label: '投稿/管理画面URL', type: 'url', required: false, hint: '手動投稿時に開く先' },
+        { key: 'note', label: 'メモ（投稿手順・アカウント等）', type: 'textarea', required: false },
+      ],
+    },
+  },
 };
+
+// 手動投稿プリセットの共通定義を作るヘルパ（自動なし・URL＋メモ）。
+function manualOnly(urlLabel) {
+  return {
+    auto: { supported: false, status: 'unsupported', note: '自動投稿APIは未対応。生成物をコピーして手動で投稿します（投稿状態は記録できます）。', fields: [] },
+    manual: {
+      fields: [
+        { key: 'account_url', label: urlLabel || 'アカウント/投稿URL', type: 'url', required: false, hint: '手動投稿時に開く先' },
+        { key: 'note', label: 'メモ（投稿手順・アカウント等）', type: 'textarea', required: false },
+      ],
+    },
+  };
+}
 
 // 記事生成の CHANNEL_PROFILES と対応するキー（生成→投稿でキーを揃える）。
 // blog/homepage は wordpress ドライバで扱う（生成キーとの対応表）。

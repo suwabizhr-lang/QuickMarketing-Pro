@@ -6,11 +6,13 @@
 import { getChannelDriver } from '../channels.js';
 import { publishLine } from './line.js';
 import { publishWebhook } from './webhook.js';
+import { publishWordpress } from './wordpress.js';
 
 // driver.key → 実装ハンドラ。ここに足すだけで自動投稿対応が増える。
 const HANDLERS = {
   line: publishLine,
   webhook: publishWebhook,
+  wordpress: publishWordpress,
 };
 
 // conn: channel_connection 行（auto_config等を含む生の値） / post: { channel, body } / store

@@ -770,6 +770,8 @@ async function refreshAdView() {
   state.adImages = state.adImages || [];
   renderAdThumbs();
   if (has) loadAdBgm();
+  // テロップ欄を最初から空で表示（押さなくても何を入れる場所か分かるように）
+  if ($('avd_captions') && !$('avd_captions').innerHTML.trim()) renderCaptions([], []);
 }
 async function genAdCopy() {
   if (!requireStore()) return;
@@ -881,6 +883,14 @@ function renderAdClips() {
       </select></label>
       <button class="sm ghost" style="padding:0 8px" onclick="removeAdClip(${i})">×</button>
     </div>`).join('');
+  updatePhotoNote();
+}
+// クリップの有無で写真欄の注意書きを切替（クリップありなら写真は使われないと目立たせる）
+function updatePhotoNote() {
+  const note = document.getElementById('avd_photo_note'); if (!note) return;
+  const hasClips = (state.adClips || []).length > 0;
+  if (hasClips) { note.style.color = '#c0392b'; note.textContent = '⚠ 動画クリップがあるため、追加した写真は今回使われません（クリップが優先）。写真で作るにはクリップを×で全部外してください。'; }
+  else { note.style.color = ''; note.textContent = '動画クリップを入れた場合、写真は使われません（クリップが優先）。写真だけで作るときはクリップを空にしてください。'; }
 }
 function removeAdClip(i) { state.adClips.splice(i, 1); renderAdClips(); }
 async function genAdVideo() {

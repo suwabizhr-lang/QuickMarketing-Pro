@@ -326,14 +326,15 @@ export async function generateSlideshow({
     }
 
     // ナレーション音声（AI TTS）。各セグメントの文言を音声化し、segStart[i] から配置。無効時は空。
+    // 単一セグメント(useXfade=false)でも鳴るよう、その場合は先頭0秒に配置する。
     let narrClips = []; // { file, startSec }
-    if (narration && ttsEnabled() && useXfade) {
+    if (narration && ttsEnabled()) {
       for (let i = 0; i < n; i++) {
         const t = (narrTexts[i] || '').trim();
         if (!t) continue;
         const mp3 = join(tmp, `narr${i}.mp3`);
         const okSyn = await synthToFile(t, mp3, { speed: 1.05 });
-        if (okSyn) narrClips.push({ file: mp3, startSec: segStart[i] || 0 });
+        if (okSyn) narrClips.push({ file: mp3, startSec: useXfade ? (segStart[i] || 0) : 0 });
       }
     }
     const hasNarr = narrClips.length > 0;
@@ -382,15 +383,35 @@ export async function generateSlideshow({
         '-movflags', '+faststart', '-y', outPath,
       ]);
     } else {
-      // セグメント1枚: xfade不要。単体を再エンコード（+BGM）。
+      // セグメント1枚: xfade不要。単体を再エンコード（+BGM +ナレーション）。
       const listPath = join(tmp, 'list.txt');
       writeFileSync(listPath, segs.map(s => `file '${s.replace(/\\/g, '/')}'`).join('\n'), 'utf8');
-      if (bgm) {
+      if (bgm || hasNarr) {
+        // 入力: [0]=concat映像, その後 BGM → ナレーション群
+        const audioInputs = [];
+        let ai = 1, bgmIdx = -1;
+        if (bgm) { audioInputs.push('-i', bgm); bgmIdx = ai; ai++; }
+        const narrIdx = [];
+        for (const nc of narrClips) { audioInputs.push('-i', nc.file); narrIdx.push({ idx: ai, startSec: nc.startSec }); ai++; }
+        const aChains = [], mixLabels = [];
+        if (bgm) {
+          const bgmVol = hasNarr ? 0.22 : 0.6;
+          aChains.push(`[${bgmIdx}:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=${bgmVol}[abgm]`);
+          mixLabels.push('[abgm]');
+        }
+        narrIdx.forEach((nn, k) => {
+          const delayMs = Math.round(nn.startSec * 1000);
+          aChains.push(`[${nn.idx}:a]adelay=${delayMs}|${delayMs},volume=1.6[an${k}]`);
+          mixLabels.push(`[an${k}]`);
+        });
+        const mix = mixLabels.length > 1
+          ? `${mixLabels.join('')}amix=inputs=${mixLabels.length}:duration=first:dropout_transition=0,volume=${mixLabels.length}[a]`
+          : `${mixLabels[0]}anull[a]`;
         await run([
-          '-f', 'concat', '-safe', '0', '-i', listPath, '-i', bgm,
-          '-filter_complex', `[1:a]afade=t=out:st=${Math.max(0, bodySeconds - 2)}:d=2,volume=0.6[a]`,
+          '-f', 'concat', '-safe', '0', '-i', listPath, ...audioInputs,
+          '-filter_complex', aChains.concat(mix).join(';'),
           '-map', '0:v', '-map', '[a]',
-          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-shortest',
+          '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-t', bodySeconds.toFixed(3),
           '-movflags', '+faststart', '-y', outPath,
         ]);
       } else {

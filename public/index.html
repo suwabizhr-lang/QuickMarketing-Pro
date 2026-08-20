@@ -375,13 +375,16 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
           <option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option>
         </select></div>
       </div>
-      <label style="margin-top:10px">写真を追加（複数可・動画クリップが無い場合に使用）</label>
+      <label style="margin-top:10px">写真を追加（複数可）</label>
+      <div class="muted" id="avd_photo_note">動画クリップを入れた場合、写真は使われません（クリップが優先）。写真だけで作るときはクリップを空にしてください。</div>
       <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
       <div class="thumbs" id="avd_thumbs"></div>
-      <label>AIへのヒント（任意・文言そのものではありません）</label><input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">
+      <label>AIが文言を作るときの参考メモ（任意）</label>
+      <input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">
+      <div class="muted" style="font-size:12px">ここに書いた文章は動画には出ません。テロップ本文は下の「テロップ／ナレーション文言」の欄で決まります。</div>
 
       <h3>テロップ／ナレーションの文言</h3>
-      <p class="muted">「AIで文言を作る」で各シーンの文言を自動生成→下の欄で自由に編集できます。空欄のまま生成すればAIにお任せ（すぐ作りたい方向け）。この文言がテロップ＆ナレーションになります。</p>
+      <p class="muted">下の各欄に入れた文字が、そのまま<b>画面のテロップ</b>になり、ナレーションONなら<b>その文言を音声で読み上げ</b>ます。<br>自分で書いてもOK。思いつかなければ「AIで文言を作る」を押すと自動で埋まります（後から自由に編集可）。<b>空欄のまま生成すると、その欄はAIにお任せ</b>になります。</p>
       <div style="margin:6px 0"><button class="sm" onclick="genCaptions()">AIで文言を作る</button> <span id="avd_capstate" class="muted"></span></div>
       <div id="avd_captions"></div>
 
@@ -399,7 +402,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に店名のオープニング面を入れる</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_telop" checked style="width:auto"> テロップ（字幕）を表示する</label>
-      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto"> AIナレーション（上の文言を音声で読み上げ）を入れる</label>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto"> AIナレーションを入れる（上の「テロップ／ナレーション文言」を音声で読み上げます）</label>
       <div style="margin-top:8px"><button class="y" onclick="genAdVideo()">広告動画を生成</button></div>
       <div id="avd_out" class="out" style="display:none"></div>
     </div>

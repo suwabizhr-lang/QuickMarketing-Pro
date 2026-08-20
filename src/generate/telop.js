@@ -67,7 +67,7 @@ export async function telopPng({
   const texts = lines.map((ln, i) => {
     const y = top + padY + Math.round(lineH * (i + 0.78));
     return `<text x="${CW / 2}" y="${y}" font-size="${fontSize}" fill="${color}"
-      text-anchor="middle" font-family="'Yu Gothic','Meiryo','Noto Sans JP',sans-serif"
+      text-anchor="middle" font-family="'Yu Gothic','Meiryo','Noto Sans CJK JP','Noto Sans JP','Noto Sans CJK JP Bold',sans-serif"
       font-weight="800" paint-order="stroke" stroke="#000000" stroke-width="${style === 'band' ? 0 : 6}"
       stroke-linejoin="round">${esc(ln)}</text>`;
   }).join('');

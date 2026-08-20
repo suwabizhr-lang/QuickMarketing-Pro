@@ -40,6 +40,7 @@ let AD_FORMATS = []; // 広告フォーマット定義
     renderConnectionForm();
 
     $('sc_freq').addEventListener('change', () => { $('sc_wdaybox').style.display = $('sc_freq').value === 'weekly' ? 'block' : 'none'; });
+    $('avd_logo').addEventListener('change', () => { $('avd_logobox').style.display = $('avd_logo').checked ? 'flex' : 'none'; });
 
     const af = await api('/api/ad-formats'); AD_FORMATS = af.formats;
     $('ad_medias').innerHTML = AD_FORMATS.map(f =>
@@ -855,7 +856,7 @@ async function genAdVideo() {
       clip_seconds_list: clipUrls.length ? secList : undefined,
       clip_speeds: clipUrls.length ? spdList : undefined,
       color_grade: $('avd_grade').value || 'none',
-      use_logo: $('avd_logo').checked,
+      use_logo: $('avd_logo').checked, logo_pos: $('avd_logopos').value || 'top-right', logo_size: $('avd_logosize').value || 'medium',
       auto_bgm: $('avd_bgm_on').checked,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,

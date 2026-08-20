@@ -364,7 +364,17 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
           <option value="none">補正なし</option><option value="bright">明るく</option><option value="vivid">鮮やか</option><option value="warm">暖色</option><option value="cool">寒色</option><option value="cinema">シネマ調</option>
         </select></div>
       </div>
-      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_logo" style="width:auto"> 店舗ロゴを右上に表示（登録ビューでロゴ登録が必要）</label>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_logo" style="width:auto"> 店舗ロゴを表示（登録ビューでロゴ登録が必要）</label>
+      <div class="row" id="avd_logobox" style="display:none">
+        <div><label>ロゴ位置</label><select id="avd_logopos">
+          <option value="top-right">右上</option><option value="top-left">左上</option>
+          <option value="bottom-right">右下</option><option value="bottom-left">左下</option>
+          <option value="top-center">中央上</option><option value="bottom-center">中央下</option>
+        </select></div>
+        <div><label>ロゴサイズ</label><select id="avd_logosize">
+          <option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option>
+        </select></div>
+      </div>
       <label style="margin-top:10px">写真を追加（複数可・動画クリップが無い場合に使用）</label>
       <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
       <div class="thumbs" id="avd_thumbs"></div>

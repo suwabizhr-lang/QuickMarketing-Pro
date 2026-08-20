@@ -26,6 +26,28 @@ export const COLOR_GRADES = {
   cinema: 'eq=contrast=1.18:saturation=0.9:gamma=0.95',
 };
 function gradeFilter(grade) { return COLOR_GRADES[grade] || ''; }
+
+// ロゴ位置プリセット → overlay の x,y 式（mは余白px）。
+export const LOGO_POSITIONS = {
+  'top-right': 'top-right', 'top-left': 'top-left', 'bottom-right': 'bottom-right',
+  'bottom-left': 'bottom-left', 'top-center': 'top-center', 'bottom-center': 'bottom-center',
+};
+function logoXY(pos, mx, my) {
+  switch (pos) {
+    case 'top-left': return { x: `${mx}`, y: `${my}` };
+    case 'bottom-right': return { x: `main_w-overlay_w-${mx}`, y: `main_h-overlay_h-${my}` };
+    case 'bottom-left': return { x: `${mx}`, y: `main_h-overlay_h-${my}` };
+    case 'top-center': return { x: `(main_w-overlay_w)/2`, y: `${my}` };
+    case 'bottom-center': return { x: `(main_w-overlay_w)/2`, y: `main_h-overlay_h-${my}` };
+    default: return { x: `main_w-overlay_w-${mx}`, y: `${my}` }; // top-right（既定）
+  }
+}
+// ロゴサイズプリセット → 幅px（短辺基準の割合）。
+function logoWidth(size, w, h) {
+  const base = Math.min(w, h);
+  const ratio = size === 'small' ? 0.14 : size === 'large' ? 0.30 : 0.22; // 既定 medium
+  return Math.round(base * ratio);
+}
 const bgmDir = join(__dirname, '..', '..', 'assets', 'bgm'); // フリー音源を置く場所（任意）
 
 function run(args) {
@@ -88,7 +110,7 @@ async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, 
 
 // 動画クリップ1本をスライド化: 頭から dur 秒トリム → w×h に中央cover → テロップ焼き込み → 無音セグメントmp4。
 // リール/TikTok向け。元音は消す（BGMに差し替える前提）。
-async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H, showTelop = true, speed = 1, grade = 'none', logoPath = null }) {
+async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H, showTelop = true, speed = 1, grade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium' }) {
   const seg = join(tmp, `clip${idx}.mp4`);
   const sp = Math.max(0.5, Math.min(2, Number(speed) || 1));
   const srcDur = dur * sp; // 速度spなら素材は dur*sp 秒使うと出力 dur 秒になる
@@ -107,7 +129,9 @@ async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w 
     inputs.push('-i', telop); overlays.push({ idx: inIdx, x: '0', y: '0' }); inIdx++;
   }
   if (logoPath) {
-    inputs.push('-i', logoPath); overlays.push({ idx: inIdx, x: `main_w-overlay_w-${Math.round(w * 0.04)}`, y: `${Math.round(h * 0.03)}`, logo: true, size: Math.round(w * 0.22) }); inIdx++;
+    const mx = Math.round(w * 0.04), my = Math.round(h * 0.03);
+    const { x, y } = logoXY(logoPos, mx, my);
+    inputs.push('-i', logoPath); overlays.push({ idx: inIdx, x, y, logo: true, size: logoWidth(logoSize, w, h) }); inIdx++;
   }
 
   // filter: [0]cover→[base]、overlayを順に重ねる。ロゴは事前にscale。
@@ -205,7 +229,8 @@ export async function generateSlideshow({
   clips = [], clipSeconds = 6, // 動画クリップ素材（絶対パス配列）。clipSecondsは数値 or 配列(各クリップ個別秒数)
   clipSpeeds = [],       // 各クリップの再生速度（0.5〜2倍）。省略時は等速
   colorGrade = 'none',   // 色補正プリセット（none/bright/vivid/warm/cool/cinema）
-  logoPath = null,       // 店舗ロゴ（各クリップ/スライドの右上に合成）
+  logoPath = null,       // 店舗ロゴ（各クリップに合成）
+  logoPos = 'top-right', logoSize = 'medium', // ロゴ位置(6択)・サイズ(small/medium/large)
   showTelop = true,      // テロップ文言を映像に焼くか
   narration = false,     // 各セグメントの文言をAI音声(TTS)で読み上げBGMに重ねるか
 }) {
@@ -236,7 +261,7 @@ export async function generateSlideshow({
         const cs = Array.isArray(clipSeconds) ? clampSec(clipSeconds[i] ?? clipSeconds[0] ?? 6) : clampSec(clipSeconds);
         pushSeg(await buildClipSlide({
           clipPath: clips[i], telopText: captions[i] || '', position: 'bottom', dur: cs, tmp, idx: i, w, h, showTelop,
-          speed: clipSpeeds[i], grade: colorGrade, logoPath,
+          speed: clipSpeeds[i], grade: colorGrade, logoPath, logoPos, logoSize,
         }), cs, captions[i] || null);
       }
     } else if (images.length > 0) {

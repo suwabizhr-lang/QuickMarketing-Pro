@@ -609,7 +609,9 @@ app.post('/api/generate/ad-video', async (req, res) => {
     const r = await generateAdVideo({
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
-      images, clips, clipSeconds, clipSpeeds, colorGrade, logoPath, autoBgm, bgmPath,
+      images, clips, clipSeconds, clipSpeeds, colorGrade, logoPath,
+      logoPos: b.logo_pos || 'top-right', logoSize: b.logo_size || 'medium',
+      autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
       showTelop: b.show_telop !== false, narration: b.narration === true,
     });

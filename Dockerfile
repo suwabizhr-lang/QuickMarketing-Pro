@@ -3,10 +3,13 @@
 # telop.js は 'Yu Gothic','Meiryo','Noto Sans JP',sans-serif の順でフォールバック → Linuxでは Noto CJK が効く。
 FROM node:20-slim
 
-# 日本語フォント（動画テロップ用）と、sharp/ffmpeg-static 実行に必要な最小ライブラリ。
+# 日本語フォント（動画テロップ用）+ fontconfig（設定ファイル/fc-cache）+ 最小ライブラリ。
+# fontconfig が無いと "Cannot load default config file" が出て sharp/ffmpeg のテロップ描画が不安定になる。
 RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-noto-cjk \
+      fontconfig \
       ca-certificates \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /srv

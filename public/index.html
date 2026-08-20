@@ -403,19 +403,16 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に店名のオープニング面を入れる</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_telop" checked style="width:auto"> テロップ（字幕）を表示する</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto" onchange="document.getElementById('avd_narrbox').style.display=this.checked?'block':'none'"> AIナレーションを入れる（上の「テロップ／ナレーション文言」を音声で読み上げます）</label>
-      <div id="avd_narrbox" class="row" style="display:none;margin:4px 0 8px">
-        <div><label>声のタイプ</label><select id="avd_narr_voice">
-          <option value="female-bright">女性・明るい</option>
-          <option value="female-soft">女性・やわらか</option>
-          <option value="male-low">男性・落ち着き</option>
-          <option value="male">男性・標準</option>
-          <option value="neutral">中性</option>
-        </select></div>
-        <div><label>話す速さ</label><select id="avd_narr_speed">
-          <option value="slow">ゆっくり</option>
-          <option value="normal" selected>標準</option>
-          <option value="fast">早口</option>
-        </select></div>
+      <div id="avd_narrbox" style="display:none;margin:4px 0 8px">
+        <div class="row">
+          <div><label>声のタイプ</label><select id="avd_narr_voice"></select></div>
+          <div><label>話す速さ</label><select id="avd_narr_speed">
+            <option value="slow">ゆっくり</option>
+            <option value="normal" selected>標準</option>
+            <option value="fast">早口</option>
+          </select></div>
+        </div>
+        <div style="margin-top:6px"><button type="button" class="sm" onclick="previewVoice()">▶ この声を試聴</button> <span id="avd_narr_prev" class="muted"></span></div>
       </div>
       <div style="margin-top:8px"><button class="y" onclick="genAdVideo()">広告動画を生成</button></div>
       <div id="avd_out" class="out" style="display:none"></div>

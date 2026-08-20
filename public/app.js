@@ -772,6 +772,33 @@ async function refreshAdView() {
   if (has) loadAdBgm();
   // テロップ欄を最初から空で表示（押さなくても何を入れる場所か分かるように）
   if ($('avd_captions') && !$('avd_captions').innerHTML.trim()) renderCaptions([], []);
+  loadNarrVoices();
+}
+// ナレーションの声一覧を読み込んでドロップダウンに反映（Google TTS有効時のみ）。
+async function loadNarrVoices() {
+  const sel = $('avd_narr_voice'); if (!sel) return;
+  try {
+    const { enabled, voices } = await api('/api/tts/voices');
+    if (enabled && voices && voices.length) {
+      sel.innerHTML = voices.map(v => `<option value="${v.key}">${escapeHtml(v.label)}</option>`).join('');
+    } else {
+      sel.innerHTML = `<option value="">（標準の声）</option>`; // フォールバック
+    }
+  } catch { sel.innerHTML = `<option value="">（標準の声）</option>`; }
+}
+// 選択中の声で短いサンプルを試聴（その場再生）。
+let _previewAudio = null;
+async function previewVoice() {
+  const voice = $('avd_narr_voice') ? $('avd_narr_voice').value : '';
+  const speed = $('avd_narr_speed') ? $('avd_narr_speed').value : 'normal';
+  $('avd_narr_prev').textContent = '試聴を生成中…';
+  try {
+    const r = await api('/api/tts/preview', 'POST', { voice, speed });
+    if (_previewAudio) { _previewAudio.pause(); }
+    _previewAudio = new Audio(r.audio);
+    await _previewAudio.play();
+    $('avd_narr_prev').textContent = '▶ 再生中';
+  } catch (e) { $('avd_narr_prev').textContent = '⚠ ' + e.message; }
 }
 async function genAdCopy() {
   if (!requireStore()) return;
@@ -919,7 +946,7 @@ async function genAdVideo() {
       bgm_prompt: ($('avd_bgm_prompt') ? $('avd_bgm_prompt').value.trim() : '') || null,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
-      narr_voice: $('avd_narr_voice') ? $('avd_narr_voice').value : 'female-bright',
+      narr_voice: $('avd_narr_voice') ? $('avd_narr_voice').value : '',
       narr_speed: $('avd_narr_speed') ? $('avd_narr_speed').value : 'normal',
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');

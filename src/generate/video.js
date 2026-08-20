@@ -11,6 +11,7 @@ import sharp from 'sharp';
 import { qrPngBuffer } from './qr.js';
 import { telopPng } from './telop.js';
 import { synthToFile, ttsEnabled } from './tts.js';
+import { synthToFile as gSynthToFile, gTtsEnabled } from './googleTts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const W = 1080, H = 1920, FPS = 30; // 既定は 9:16。generateSlideshow の width/height で上書き可。
@@ -330,12 +331,15 @@ export async function generateSlideshow({
     // ナレーション音声（AI TTS）。各セグメントの文言を音声化し、segStart[i] から配置。無効時は空。
     // 単一セグメント(useXfade=false)でも鳴るよう、その場合は先頭0秒に配置する。
     let narrClips = []; // { file, startSec }
-    if (narration && ttsEnabled()) {
+    if (narration && (gTtsEnabled() || ttsEnabled())) {
       for (let i = 0; i < n; i++) {
         const t = (narrTexts[i] || '').trim();
         if (!t) continue;
         const mp3 = join(tmp, `narr${i}.mp3`);
-        const okSyn = await synthToFile(t, mp3, { voice: narrVoice || undefined, speed: narrSpeed });
+        // Google TTS(日本語が自然)を優先。無効/失敗ならOpenAI TTSにフォールバック。
+        let okSyn = false;
+        if (gTtsEnabled()) okSyn = await gSynthToFile(t, mp3, { voice: narrVoice || undefined, speed: narrSpeed });
+        if (!okSyn && ttsEnabled()) okSyn = await synthToFile(t, mp3, { speed: narrSpeed });
         if (okSyn) narrClips.push({ file: mp3, startSec: useXfade ? (segStart[i] || 0) : 0 });
       }
     }

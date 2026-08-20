@@ -24,6 +24,7 @@ import { registerAuth, ownerId, authEnabled } from '../auth.js';
 import * as storage from '../storage.js';
 import { sendSubmissionNotice, mailerEnabled } from '../mailer.js';
 import { musicgenToFile, musicgenEnabled } from '../generate/musicgen.js';
+import { synthToFile as gSynthToFile, gTtsEnabled, listJaVoices } from '../generate/googleTts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -575,6 +576,21 @@ app.post('/api/generate/ad-copy', async (req, res) => {
 
 // --- 広告動画（テンプレート型 + 既存スライドショーエンジンで合成） ---
 app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions(), aiBgm: musicgenEnabled() }));
+// ナレーションの声一覧（Google TTS有効時のみ声を返す。無効なら空＝UIはOpenAIフォールバック）。
+app.get('/api/tts/voices', async (req, res) => ok(res, { enabled: gTtsEnabled(), voices: gTtsEnabled() ? listJaVoices() : [] }));
+// 声の試聴: 指定の声で短いサンプルを生成し、data URL(base64 mp3)で返す（その場再生用）。
+app.post('/api/tts/preview', async (req, res) => {
+  if (!gTtsEnabled()) return bad(res, 400, 'ナレーション音声が利用できません');
+  const b = req.body || {};
+  const sample = (b.text || 'こんにちは。ブランド品の買取なら当店へ。査定は無料です。').slice(0, 120);
+  const tmp = join(tmpDir(), `preview-${randomUUID()}.mp3`);
+  const okGen = await gSynthToFile(sample, tmp, { voice: b.voice, speed: NARR_SPEED_MAP[b.speed] ?? 1.05 });
+  if (!okGen) return bad(res, 500, '試聴の生成に失敗しました');
+  try {
+    const dataUrl = 'data:audio/mpeg;base64,' + readFileSync(tmp).toString('base64');
+    ok(res, { audio: dataUrl });
+  } finally { try { rmSync(tmp, { force: true }); } catch {} }
+});
 // テロップ文言だけをAI生成して返す（ユーザーが編集してから動画化するため）。
 app.post('/api/ad-video/captions', async (req, res) => {
   const b = req.body || {};
@@ -587,15 +603,7 @@ app.post('/api/ad-video/captions', async (req, res) => {
   const captions = await buildCaptions({ store, campaign, template, style, extra: (b.extra || '').trim() });
   ok(res, { captions, scenes: template.scenes.map(s => s.kind) });
 });
-// ナレーションの声(日本語ラベル)→OpenAI TTS voice。話速ラベル→倍率。
-const NARR_VOICE_MAP = {
-  'female-bright': 'nova',   // 女性・明るい
-  'female-soft': 'shimmer',  // 女性・やわらか
-  'male-low': 'onyx',        // 男性・低め/落ち着き
-  'male': 'echo',            // 男性・標準
-  'neutral': 'alloy',        // 中性
-  'bright': 'fable',         // 明るい(中性)
-};
+// 話速ラベル→倍率。
 const NARR_SPEED_MAP = { slow: 0.9, normal: 1.05, fast: 1.25 };
 // body: { store_id, template, aspect?, campaign_id?, form_slug?, extra?, image_urls[], per? , auto_bgm?, bgm_url?, narr_voice?, narr_speed? }
 app.post('/api/generate/ad-video', async (req, res) => {
@@ -651,7 +659,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
       autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
       showTelop: b.show_telop !== false, narration: b.narration === true,
-      narrVoice: NARR_VOICE_MAP[b.narr_voice] || null, // 声のタイプ(日本語)→OpenAI voice
+      narrVoice: b.narr_voice || null, // Google TTS声キー(f-aoede等)。そのまま伝播。
       narrSpeed: NARR_SPEED_MAP[b.narr_speed] ?? 1.05, // 話速(ゆっくり/標準/早口)
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;

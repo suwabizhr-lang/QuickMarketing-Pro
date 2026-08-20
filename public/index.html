@@ -351,7 +351,12 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
         <div><label>使うキャンペーン（任意）</label><select id="avd_campaign"><option value="">（選択しない）</option></select></div>
         <div><label>CTAに使うQR/URL（任意）</label><select id="avd_form"><option value="">（なし）</option></select></div>
       </div>
-      <label>写真を追加（複数可）</label>
+      <label>動画クリップを追加（1〜3本・リール/TikTok向け。写真より優先）</label>
+      <input id="avd_clips" type="file" accept="video/*" multiple onchange="avdUploadClips()">
+      <div class="muted">各クリップは頭から数秒を使い、縦型に切り出してテロップ＋BGMを乗せます。元の音声は消えます。</div>
+      <div class="thumbs" id="avd_cliplist"></div>
+      <label>1クリップあたりの秒数</label><input id="avd_clipsec" type="number" min="2" max="15" value="6" style="max-width:120px">
+      <label style="margin-top:10px">写真を追加（複数可・動画クリップが無い場合に使用）</label>
       <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
       <div class="thumbs" id="avd_thumbs"></div>
       <label>追加の指示（任意）</label><input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">

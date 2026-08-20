@@ -571,6 +571,9 @@ app.post('/api/generate/ad-video', async (req, res) => {
   const style = await db.getSetting(store.id, 'article_style', {});
   const images = [];
   if (Array.isArray(b.image_urls)) for (const u of b.image_urls) { const p = await resolveToLocal(u); if (p) images.push(p); }
+  // 動画クリップ素材（リール用）。あればこちらが優先されリール生成。最大3本。
+  const clips = [];
+  if (Array.isArray(b.clip_urls)) for (const u of b.clip_urls.slice(0, 3)) { const p = await resolveToLocal(u); if (p) clips.push(p); }
 
   // BGM: 既存 /api/generate/video と同じ解決
   const autoBgm = b.auto_bgm !== false;
@@ -584,7 +587,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
     const r = await generateAdVideo({
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
-      images, autoBgm, bgmPath,
+      images, clips, clipSeconds: Number(b.clip_seconds) || 6, autoBgm, bgmPath,
       transition: b.transition || 'fade', opening: b.opening !== false,
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;
@@ -679,6 +682,23 @@ app.post('/api/asset/upload', async (req, res) => {
   const fname = `${randomUUID()}.${ext}`;
   const url = await saveAssetFile(`${store.id}/uploads/${fname}`, buf, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
   const asset = await db.createAsset({ store_id: store.id, kind: 'upload_image', url, meta: { bytes: buf.length } });
+  ok(res, { asset, url: asset.url });
+});
+
+// --- 動画クリップのアップロード（リール素材。フレーム抽出せず動画そのものを保存） ---
+app.post('/api/asset/clip-upload', async (req, res) => {
+  const b = req.body || {};
+  if (await guardStore(req, res, b.store_id)) return;
+  const store = await db.getStore(b.store_id);
+  if (!store) return bad(res, 400, 'store_id が不正です');
+  const dataUrl = b.data_url || '';
+  const m = /^data:video\/(mp4|quicktime|webm|x-m4v);base64,(.+)$/i.exec(dataUrl);
+  if (!m) return bad(res, 400, '動画は mp4/mov/webm の dataURL で送ってください');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 100 * 1024 * 1024) return bad(res, 400, '動画は100MBまでにしてください');
+  const fname = `${randomUUID()}.mp4`;
+  const url = await saveAssetFile(`${store.id}/clips/${fname}`, buf, 'video/mp4');
+  const asset = await db.createAsset({ store_id: store.id, kind: 'clip', url, meta: { bytes: buf.length } });
   ok(res, { asset, url: asset.url });
 });
 

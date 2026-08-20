@@ -796,14 +796,37 @@ function renderAdThumbs() {
     `<span class="t"><img src="${u}"><button onclick="removeAdImg(${i})">×</button></span>`).join('');
 }
 function removeAdImg(i) { state.adImages.splice(i, 1); renderAdThumbs(); }
+// 動画クリップ（リール素材）のアップロード。最大3本。
+async function avdUploadClips() {
+  if (!requireStore()) return;
+  state.adClips = state.adClips || [];
+  const files = [...($('avd_clips').files || [])];
+  for (const f of files) {
+    if (state.adClips.length >= 3) { alert('動画クリップは最大3本までです'); break; }
+    try {
+      $('avd_cliplist').insertAdjacentHTML('beforeend', '<span class="muted" id="avd_up">アップロード中…</span>');
+      const res = await api('/api/asset/clip-upload', 'POST', { store_id: state.store.id, data_url: await fileToDataUrl(f) });
+      state.adClips.push({ url: res.url, name: f.name });
+    } catch (e) { alert('動画アップロード失敗: ' + e.message); }
+    finally { document.getElementById('avd_up')?.remove(); }
+  }
+  $('avd_clips').value = ''; renderAdClips();
+}
+function renderAdClips() {
+  $('avd_cliplist').innerHTML = (state.adClips || []).map((c, i) =>
+    `<span class="pill">🎬 ${escapeHtml(c.name || 'clip' + (i + 1))} <button class="sm ghost" style="padding:0 6px" onclick="removeAdClip(${i})">×</button></span>`).join('');
+}
+function removeAdClip(i) { state.adClips.splice(i, 1); renderAdClips(); }
 async function genAdVideo() {
   if (!requireStore()) return;
-  $('avd_out').style.display = 'block'; $('avd_out').style.color = ''; $('avd_out').textContent = '広告動画を生成中…（写真ありは数十秒かかる場合があります）';
+  const clipUrls = (state.adClips || []).map(c => c.url);
+  $('avd_out').style.display = 'block'; $('avd_out').style.color = ''; $('avd_out').textContent = '広告動画を生成中…（動画クリップありは1分ほどかかる場合があります）';
   try {
     const r = await api('/api/generate/ad-video', 'POST', {
       store_id: state.store.id, template: $('avd_template').value, aspect: $('avd_aspect').value || '9:16',
       campaign_id: $('avd_campaign').value || null, form_slug: $('avd_form').value || null,
-      extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], auto_bgm: $('avd_bgm_on').checked,
+      extra: $('avd_extra').value.trim(), image_urls: state.adImages || [], clip_urls: clipUrls, clip_seconds: Number($('avd_clipsec').value) || 6,
+      auto_bgm: $('avd_bgm_on').checked,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');

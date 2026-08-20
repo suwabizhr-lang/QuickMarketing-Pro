@@ -74,6 +74,26 @@ async function buildSlide({ imgPath, brandColor, telopText, position, dur, tmp, 
   return seg;
 }
 
+// 動画クリップ1本をスライド化: 頭から dur 秒トリム → w×h に中央cover → テロップ焼き込み → 無音セグメントmp4。
+// リール/TikTok向け。元音は消す（BGMに差し替える前提）。
+async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w = W, h = H }) {
+  const seg = join(tmp, `clip${idx}.mp4`);
+  const telop = join(tmp, `telopc${idx}.png`);
+  writeFileSync(telop, await telopPng({ text: telopText || '', position: position || 'bottom', width: w, height: h }));
+  // scale=w×hにcover(=increase で短辺合わせ)→中央crop→fps/SAR統一→尺不足はtpadで最終フレーム複製し必ずdur秒に→テロップoverlay。
+  // tpad=stop_mode=clone: 素材が dur より短くても最後のフレームで埋め、xfade offset と実尺のズレを防ぐ。
+  const cover = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,fps=${FPS},tpad=stop_mode=clone:stop_duration=${dur},trim=duration=${dur},format=yuv420p[bg];[bg][1:v]overlay=0:0,format=yuv420p[v]`;
+  const args = [
+    '-t', String(dur), '-i', clipPath,   // [0] 動画（頭から dur 秒）
+    '-i', telop,                          // [1] テロップ
+    '-filter_complex', `[0:v]${cover}`,
+    '-map', '[v]', '-an', '-r', String(FPS), '-t', String(dur),
+    '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-y', seg,
+  ];
+  await run(args);
+  return seg;
+}
+
 // 末尾CTAカット（白背景に中央QR + 上部テロップ）。ctaUrl が空なら QR を省きテロップのみ。
 async function buildCta({ ctaUrl, ctaLabel, dur, tmp, w = W, h = H }) {
   const seg = join(tmp, 'seg_cta.mp4');
@@ -148,6 +168,7 @@ export async function generateSlideshow({
   width = W, height = H, // 比率対応: 9:16=1080x1920 / 1:1=1080x1080 / 16:9=1920x1080
   transition = 'fade',   // スライド間xfadeの種類（fade/dissolve/slideleft/wipeleft/...）
   openingText = null,    // 指定時、冒頭にブランド面(店名)カットを差し込む
+  clips = [], clipSeconds = 6, // 動画クリップ素材（絶対パス配列）。各クリップを頭から clipSeconds 秒使う
 }) {
   const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
@@ -168,7 +189,15 @@ export async function generateSlideshow({
       pushSeg(await buildOpening({ storeName: openingText, brandColor, dur: openDur, tmp, w, h }), openDur);
     }
 
-    if (images.length > 0) {
+    if (clips.length > 0) {
+      // 動画クリップあり（リール/TikTok向け）: 各クリップを縦化＋テロップ焼き込み。テロップは captions[i]。
+      const cs = Math.max(2, Math.min(15, Number(clipSeconds) || 6));
+      for (let i = 0; i < clips.length; i++) {
+        pushSeg(await buildClipSlide({
+          clipPath: clips[i], telopText: captions[i] || '', position: 'bottom', dur: cs, tmp, idx: i, w, h,
+        }), cs);
+      }
+    } else if (images.length > 0) {
       // 写真あり: 写真ごとに1スライド。テロップは対応する captions[i]（無ければ空）。
       for (let i = 0; i < images.length; i++) {
         const framePng = join(tmp, `frame${i}.png`);

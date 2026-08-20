@@ -768,6 +768,7 @@ async function refreshAdView() {
   $('avd_campaign').innerHTML = campOptions;
   state.adImages = state.adImages || [];
   renderAdThumbs();
+  if (has) loadAdBgm();
 }
 async function genAdCopy() {
   if (!requireStore()) return;
@@ -795,27 +796,68 @@ function copyAd(btn) { const t = btn.closest('.art').querySelector('textarea').v
 
 // --- 広告動画 ---
 async function avdUploadImages() {
-  if (!requireStore()) return;
+  if (!requireStore()) { $('avd_files').value = ''; return; }
   state.adImages = state.adImages || [];
+  if (state.adImages.length >= MAX_IMAGES) { alert(`写真は最大${MAX_IMAGES}枚までです（追加できません）`); $('avd_files').value = ''; return; }
   const files = [...($('avd_files').files || [])];
-  for (const f of files) {
+  const room = MAX_IMAGES - state.adImages.length;
+  if (files.length > room) alert(`残り${room}枚まで追加できます。先頭${room}枚のみ取り込みます。`);
+  for (const f of files.slice(0, room)) {
     try { const res = await api('/api/asset/upload', 'POST', { store_id: state.store.id, data_url: await fileToDataUrl(f) }); state.adImages.push(res.url); }
     catch (e) { alert('画像アップロード失敗: ' + e.message); }
   }
   $('avd_files').value = ''; renderAdThumbs();
+}
+// 広告用BGM: 一覧読込 + アップロード（既存の /api/bgm/upload と /api/stores/:id/bgm を流用）
+async function loadAdBgm() {
+  if (!state.store) return;
+  try {
+    const { bgm } = await api(`/api/stores/${state.store.id}/bgm`);
+    $('avd_bgm').innerHTML = `<option value="">（自動 / 先頭の音源）</option>` + (bgm || []).map(b => `<option value="${b.url}">${escapeHtml(b.name)}</option>`).join('');
+  } catch {}
+}
+async function avdUploadBgm() {
+  if (!requireStore()) { $('avd_bgm_file').value = ''; return; }
+  const f = $('avd_bgm_file').files?.[0]; if (!f) return;
+  try { await api('/api/bgm/upload', 'POST', { store_id: state.store.id, data_url: await fileToDataUrl(f), name: f.name }); await loadAdBgm(); alert('BGMを追加しました'); }
+  catch (e) { alert('BGMアップロード失敗: ' + e.message); }
+  finally { $('avd_bgm_file').value = ''; }
 }
 function renderAdThumbs() {
   $('avd_thumbs').innerHTML = (state.adImages || []).map((u, i) =>
     `<span class="t"><img src="${u}"><button onclick="removeAdImg(${i})">×</button></span>`).join('');
 }
 function removeAdImg(i) { state.adImages.splice(i, 1); renderAdThumbs(); }
-// 動画クリップ（リール素材）のアップロード。最大3本。
-async function avdUploadClips() {
+const SCENE_LABEL = { hook: 'フック（つかみ）', benefit: 'ベネフィット', proof: '実績・信頼', cta: '行動喚起（CTA）' };
+// テロップ文言をAI生成して編集欄に表示（ユーザーが手直しできる）。
+async function genCaptions() {
   if (!requireStore()) return;
+  $('avd_capstate').textContent = '生成中…';
+  try {
+    const r = await api('/api/ad-video/captions', 'POST', {
+      store_id: state.store.id, template: $('avd_template').value,
+      campaign_id: $('avd_campaign').value || null, extra: $('avd_extra').value.trim(),
+    });
+    renderCaptions(r.scenes || [], r.captions || []);
+    $('avd_capstate').textContent = '✅ 生成しました（自由に編集できます）';
+  } catch (e) { $('avd_capstate').textContent = '⚠ ' + e.message; }
+}
+function renderCaptions(scenes, captions) {
+  const rows = (scenes.length ? scenes : ['hook', 'benefit', 'proof', 'cta']).map((kind, i) =>
+    `<label style="font-size:12px;color:#888">${escapeHtml(SCENE_LABEL[kind] || kind)}</label>
+     <input class="avd-cap" data-i="${i}" value="${escapeHtml(captions[i] || '')}" placeholder="この文言がテロップ＆ナレーションになります">`).join('');
+  $('avd_captions').innerHTML = rows;
+}
+// 動画クリップ（リール素材）のアップロード。最大3本。
+const MAX_CLIPS = 3, MAX_IMAGES = 10;
+async function avdUploadClips() {
+  if (!requireStore()) { $('avd_clips').value = ''; return; }
   state.adClips = state.adClips || [];
+  if (state.adClips.length >= MAX_CLIPS) { alert(`動画クリップは最大${MAX_CLIPS}本までです（追加できません）`); $('avd_clips').value = ''; return; }
   const files = [...($('avd_clips').files || [])];
-  for (const f of files) {
-    if (state.adClips.length >= 3) { alert('動画クリップは最大3本までです'); break; }
+  const room = MAX_CLIPS - state.adClips.length;
+  if (files.length > room) alert(`残り${room}本まで追加できます。先頭${room}本のみ取り込みます。`);
+  for (const f of files.slice(0, room)) {
     try {
       $('avd_cliplist').insertAdjacentHTML('beforeend', '<span class="muted" id="avd_up">アップロード中…</span>');
       const res = await api('/api/asset/clip-upload', 'POST', { store_id: state.store.id, data_url: await fileToDataUrl(f) });
@@ -857,7 +899,9 @@ async function genAdVideo() {
       clip_speeds: clipUrls.length ? spdList : undefined,
       color_grade: $('avd_grade').value || 'none',
       use_logo: $('avd_logo').checked, logo_pos: $('avd_logopos').value || 'top-right', logo_size: $('avd_logosize').value || 'medium',
-      auto_bgm: $('avd_bgm_on').checked,
+      captions: [...document.querySelectorAll('.avd-cap')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => el.value.trim()).filter(x=>x).length
+        ? [...document.querySelectorAll('.avd-cap')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => el.value.trim()) : undefined,
+      auto_bgm: $('avd_bgm_on').checked, bgm_url: $('avd_bgm').value || null,
       transition: $('avd_transition').value || 'fade', opening: $('avd_opening').checked,
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
     });

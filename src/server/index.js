@@ -11,7 +11,8 @@ import * as db from '../db.js';
 import { generateArticle, generateArticles, appendCta, listChannels, CHANNEL_PROFILES } from '../generate/article.js';
 import { writeArticle, ACTIONS as ARTICLE_ACTIONS } from '../generate/articleWriter.js';
 import { generateAdCopies, listAdFormats, AD_FORMATS } from '../generate/adCopy.js';
-import { generateAdVideo } from '../generate/adVideo.js';
+import { generateAdVideo, buildCaptions } from '../generate/adVideo.js';
+import { getAdVideoTemplate } from '../generate/adVideoTemplates.js';
 import { listAdVideoTemplates, listAdVideoAspects, listAdVideoTransitions } from '../generate/adVideoTemplates.js';
 import { generateSlideshow } from '../generate/video.js';
 import { extractSlideFrames } from '../generate/extractFrames.js';
@@ -573,6 +574,18 @@ app.post('/api/generate/ad-copy', async (req, res) => {
 
 // --- 広告動画（テンプレート型 + 既存スライドショーエンジンで合成） ---
 app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions() }));
+// テロップ文言だけをAI生成して返す（ユーザーが編集してから動画化するため）。
+app.post('/api/ad-video/captions', async (req, res) => {
+  const b = req.body || {};
+  if (await guardStore(req, res, b.store_id)) return;
+  const store = await db.getStore(b.store_id);
+  if (!store) return bad(res, 400, 'store_id が不正です');
+  const campaign = b.campaign_id ? await db.getCampaign(b.campaign_id) : null;
+  const template = getAdVideoTemplate(b.template || 'standard') || getAdVideoTemplate('standard');
+  const style = await db.getSetting(store.id, 'article_style', {});
+  const captions = await buildCaptions({ store, campaign, template, style, extra: (b.extra || '').trim() });
+  ok(res, { captions, scenes: template.scenes.map(s => s.kind) });
+});
 // body: { store_id, template, aspect?, campaign_id?, form_slug?, extra?, image_urls[], per? , auto_bgm?, bgm_url? }
 app.post('/api/generate/ad-video', async (req, res) => {
   const b = req.body || {};
@@ -609,6 +622,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
     const r = await generateAdVideo({
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
       ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
+      captions: Array.isArray(b.captions) ? b.captions : null, // ユーザー編集テロップ（あれば優先）
       images, clips, clipSeconds, clipSpeeds, colorGrade, logoPath,
       logoPos: b.logo_pos || 'top-right', logoSize: b.logo_size || 'medium',
       autoBgm, bgmPath,

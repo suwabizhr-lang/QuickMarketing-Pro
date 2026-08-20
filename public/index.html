@@ -378,11 +378,23 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <label style="margin-top:10px">写真を追加（複数可・動画クリップが無い場合に使用）</label>
       <input id="avd_files" type="file" accept="image/*" multiple onchange="avdUploadImages()">
       <div class="thumbs" id="avd_thumbs"></div>
-      <label>追加の指示（任意）</label><input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">
+      <label>AIへのヒント（任意・文言そのものではありません）</label><input id="avd_extra" placeholder="例: 20代女性向け／出張買取を強調">
+
+      <h3>テロップ／ナレーションの文言</h3>
+      <p class="muted">「AIで文言を作る」で各シーンの文言を自動生成→下の欄で自由に編集できます。空欄のまま生成すればAIにお任せ（すぐ作りたい方向け）。この文言がテロップ＆ナレーションになります。</p>
+      <div style="margin:6px 0"><button class="sm" onclick="genCaptions()">AIで文言を作る</button> <span id="avd_capstate" class="muted"></span></div>
+      <div id="avd_captions"></div>
+
+      <h3>BGM</h3>
+      <label>BGMを選択（この店舗に登録済みの音源）</label>
+      <select id="avd_bgm"></select>
+      <label>BGMを追加（著作権フリーの音源をアップロード）</label>
+      <input id="avd_bgm_file" type="file" accept="audio/*" onchange="avdUploadBgm()">
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_bgm_on" checked style="width:auto"> BGMを付ける</label>
+
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に店名のオープニング面を入れる</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_telop" checked style="width:auto"> テロップ（字幕）を表示する</label>
-      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto"> AIナレーション（テロップ文言を音声で読み上げ）を入れる</label>
-      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_bgm_on" checked style="width:auto"> BGMを付ける（登録済みの先頭音源）</label>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto"> AIナレーション（上の文言を音声で読み上げ）を入れる</label>
       <div style="margin-top:8px"><button class="y" onclick="genAdVideo()">広告動画を生成</button></div>
       <div id="avd_out" class="out" style="display:none"></div>
     </div>

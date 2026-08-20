@@ -10,7 +10,7 @@ const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
 const TONE_TXT = { polite: 'です・ます調', casual: 'だ・である調', friendly: 'やわらかい口語' };
 
 // テンプレの各シーン用テロップ（短い惹句）を一括生成。JSON配列で受け取り、失敗時は雛形にフォールバック。
-async function buildCaptions({ store, campaign, template, style, extra }) {
+export async function buildCaptions({ store, campaign, template, style, extra }) {
   const scenes = template.scenes;
   if (!hasKey()) return fallbackCaptions({ store, campaign, scenes });
   const sceneList = scenes.map((s, i) => `${i + 1}. [${s.kind}] ${s.prompt}`).join('\n');
@@ -55,10 +55,13 @@ function fallbackCaptions({ store, campaign, scenes }) {
 }
 
 // メイン。広告動画を生成して { videoUrl, seconds, ... } を返す（生成物は data/assets/<store> に保存）。
-export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false }) {
+export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, captions: userCaptions = null, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
-  const captions = await buildCaptions({ store, campaign, template, style, extra });
+  // ユーザーが編集したテロップがあれば優先。空要素はAI/雛形で補完。無ければ全部AI生成。
+  const captions = (Array.isArray(userCaptions) && userCaptions.some(x => (x || '').trim()))
+    ? userCaptions.map(x => (x || '').trim())
+    : await buildCaptions({ store, campaign, template, style, extra });
   // シーン数に合わせて1枚あたり秒数を決める（テンプレの平均尺）。写真が少なければ既存ロジックが単色/ループで補完。
   const avgPer = Math.round(template.scenes.reduce((a, s) => a + s.seconds, 0) / template.scenes.length) || 4;
 

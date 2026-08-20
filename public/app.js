@@ -52,7 +52,7 @@ let AD_FORMATS = []; // 広告フォーマット定義
     $('avd_aspect').innerHTML = avt.aspects.map(a =>
       `<option value="${a.key}" ${a.status !== 'ready' ? 'disabled' : ''}>${escapeHtml(a.label)}${a.status !== 'ready' ? '（準備中）' : ''}</option>`).join('');
     $('avd_transition').innerHTML = (avt.transitions || []).map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
-    if (avt.aiBgm) $('avd_bgm_ai_box').style.display = 'block'; // AI BGM生成（ElevenLabsキーがある時だけ）
+    if (avt.aiBgm) $('avd_bgm_ai_box').style.display = 'block'; // AI BGM生成（Murekaキーがある時だけ）
 
     $('pb_campaign').addEventListener('change', () => loadPublishBoard($('pb_campaign').value));
 
@@ -889,7 +889,9 @@ async function genAdVideo() {
   // 各クリップの個別秒数・速度を収集（クリップ数ぶん）
   const secList = [...document.querySelectorAll('.avd-clipsec')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => Number(el.value) || 6);
   const spdList = [...document.querySelectorAll('.avd-clipspd')].sort((a,b)=>a.dataset.i-b.dataset.i).map(el => Number(el.value) || 1);
-  $('avd_out').style.display = 'block'; $('avd_out').style.color = ''; $('avd_out').textContent = '広告動画を生成中…（動画クリップありは1分ほどかかる場合があります）';
+  const aiBgmOn = $('avd_bgm_ai') && $('avd_bgm_ai').checked;
+  $('avd_out').style.display = 'block'; $('avd_out').style.color = '';
+  $('avd_out').textContent = aiBgmOn ? '広告動画を生成中…（AI-BGM生成を含むため2〜3分かかる場合があります）' : '広告動画を生成中…（動画クリップありは1分ほどかかる場合があります）';
   try {
     const r = await api('/api/generate/ad-video', 'POST', {
       store_id: state.store.id, template: $('avd_template').value, aspect: $('avd_aspect').value || '9:16',

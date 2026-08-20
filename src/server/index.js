@@ -603,7 +603,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
   const clips = [];
   if (Array.isArray(b.clip_urls)) for (const u of b.clip_urls.slice(0, 3)) { const p = await resolveToLocal(u); if (p) clips.push(p); }
 
-  // BGM: bgm_mode='ai'ならElevenLabsで生成 / それ以外は指定URL→登録先頭。auto_bgm=falseで無音。
+  // BGM: bgm_mode='ai'ならMurekaで生成 / それ以外は指定URL→登録先頭。auto_bgm=falseで無音。
   const autoBgm = b.auto_bgm !== false;
   let bgmPath = null;
   if (autoBgm) {

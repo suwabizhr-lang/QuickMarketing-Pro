@@ -23,6 +23,9 @@
   button { border:none; border-radius:9999px; padding:9px 18px; font-weight:700; cursor:pointer; font-size:14px; }
   .primary { background:var(--yellow); color:var(--ink); }
   .ghost { background:transparent; border:1px solid var(--line); color:var(--ink); padding:6px 12px; }
+  /* ヘッダー(黒背景)用の白抜きボタン */
+  .hbtn { background:transparent; border:1px solid rgba(255,255,255,.5); color:#fff; padding:6px 12px; border-radius:9999px; font-weight:700; font-size:13px; cursor:pointer; text-decoration:none; display:inline-block; }
+  .hbtn:hover { background:rgba(255,255,255,.12); }
   .danger { background:transparent; border:1px solid var(--red); color:var(--red); padding:6px 12px; }
   .state { font-size:13px; margin-left:8px; }
   .pill { display:inline-block; background:var(--grey); border-radius:9999px; padding:2px 10px; font-size:12px; }
@@ -61,8 +64,8 @@
   </div>
   <div>
     <span id="who" class="sub"></span>
-    <a href="/" class="ghost" style="margin-left:10px;text-decoration:none">← システムへ</a>
-    <button id="logoutBtn" class="ghost" style="display:none;margin-left:6px">ログアウト</button>
+    <a href="/" class="hbtn" style="margin-left:10px">← システムへ</a>
+    <button id="logoutBtn" class="hbtn" style="display:none;margin-left:6px">ログアウト</button>
   </div>
 </header>
 

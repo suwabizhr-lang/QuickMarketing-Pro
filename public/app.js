@@ -349,12 +349,16 @@ async function createQr() {
 async function saveFormConfig() {
   if (!requireStore()) return;
   try {
-    const { config } = await api(`/api/stores/${state.store.id}/form-config`);
-    config.photo_min = Number($('fc_min').value) || 5;
-    config.photo_max = Number($('fc_max').value) || 10;
-    config.contact_either_required = $('fc_either').checked;
-    await api('/api/form-config', 'POST', { store_id: state.store.id, config });
-    $('fc_out').style.display = 'block'; $('fc_out').textContent = `✅ 保存しました（写真 ${config.photo_min}〜${config.photo_max}枚 / 電話・メール${config.contact_either_required ? 'どちらか必須' : '任意'}）`;
+    const config = {
+      photo: { enabled: $('fc_photo_on').checked, min: Number($('fc_photo_min').value) || 0, max: Number($('fc_photo_max').value) || 10 },
+      video: { enabled: $('fc_video_on').checked, min: Number($('fc_video_min').value) || 0, max: Number($('fc_video_max').value) || 3 },
+      phone:   { show: $('fc_phone_show').checked, required: $('fc_phone_show').checked && $('fc_phone_req').checked },
+      email:   { show: $('fc_email_show').checked, required: $('fc_email_show').checked && $('fc_email_req').checked },
+      address: { show: $('fc_addr_show').checked,  required: $('fc_addr_show').checked && $('fc_addr_req').checked },
+    };
+    const { config: saved } = await api('/api/form-config', 'POST', { store_id: state.store.id, config });
+    $('fc_out').style.display = 'block';
+    $('fc_out').textContent = `✅ 保存しました（写真${saved.photo.enabled?`${saved.photo.min}〜${saved.photo.max}枚`:'なし'} / 動画${saved.video.enabled?`${saved.video.min}〜${saved.video.max}本`:'なし'}）`;
   } catch (e) { alert('フォーム設定エラー: ' + e.message); }
 }
 async function saveDelivery() {
@@ -367,7 +371,21 @@ async function saveDelivery() {
   } catch (e) { alert('送信先保存エラー: ' + e.message); }
 }
 async function loadFormConfig() {
-  try { const { config } = await api(`/api/stores/${state.store.id}/form-config`); $('fc_min').value = config.photo_min ?? 5; $('fc_max').value = config.photo_max ?? 10; $('fc_either').checked = config.contact_either_required !== false; } catch {}
+  try {
+    const { config: c } = await api(`/api/stores/${state.store.id}/form-config`);
+    // 写真
+    $('fc_photo_on').checked = c.photo.enabled !== false;
+    $('fc_photo_min').value = c.photo.min ?? 0; $('fc_photo_max').value = c.photo.max ?? 10;
+    $('fc_photo_box').style.display = $('fc_photo_on').checked ? 'flex' : 'none';
+    // 動画
+    $('fc_video_on').checked = !!c.video.enabled;
+    $('fc_video_min').value = c.video.min ?? 0; $('fc_video_max').value = c.video.max ?? 3;
+    $('fc_video_box').style.display = $('fc_video_on').checked ? 'flex' : 'none';
+    // 電話/メール/住所
+    $('fc_phone_show').checked = c.phone.show !== false; $('fc_phone_req').checked = !!c.phone.required; $('fc_phone_req').disabled = !$('fc_phone_show').checked;
+    $('fc_email_show').checked = c.email.show !== false; $('fc_email_req').checked = !!c.email.required; $('fc_email_req').disabled = !$('fc_email_show').checked;
+    $('fc_addr_show').checked = !!c.address.show; $('fc_addr_req').checked = !!c.address.required; $('fc_addr_req').disabled = !$('fc_addr_show').checked;
+  } catch {}
 }
 async function loadDelivery() {
   try { const { delivery } = await api(`/api/stores/${state.store.id}/delivery`); $('dv_email').value = delivery.email || ''; $('dv_line').value = delivery.line_notify_token || ''; $('dv_webhook').value = delivery.webhook_url || ''; } catch {}

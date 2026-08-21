@@ -296,25 +296,45 @@ app.post('/api/campaign', async (req, res) => {
   ok(res, { campaign: await db.createCampaign(b) });
 });
 
-// 買取フォームの既定フィールド（申込フォーム設定の初期値）
-function defaultAssessmentFields() {
+// 申込フォーム設定の既定値（業種非依存）。
+// 写真/動画=あり/なし+枚数、氏名=必須固定、電話/メール/住所=表示するか＋必須か。
+function defaultFormConfig() {
   return {
-    photo_min: 5, photo_max: 10,
-    contact_either_required: true, // 電話とメールのどちらか一方を必須にする（店舗ごとに切替可）
-    contact: [
-      { key: 'name', label: 'お名前', type: 'text', required: true },
-      { key: 'tel', label: '電話番号', type: 'tel', required: false },
-      { key: 'email', label: 'メールアドレス', type: 'email', required: false },
-    ],
-    item: [
-      { key: 'item_name', label: '商品名', type: 'text', required: true },
-      { key: 'year', label: '年式', type: 'text', required: false },
-      { key: 'condition', label: '状態', type: 'select', required: true, options: ['新品', '開封済未使用', '中古', 'ジャンク'] },
-      { key: 'used_years', label: '使用年数', type: 'text', required: false },
-      { key: 'comment', label: 'コメント', type: 'textarea', required: false },
-    ],
+    photo: { enabled: true, min: 0, max: 10 },
+    video: { enabled: false, min: 0, max: 3 },
+    phone:   { show: true,  required: false },
+    email:   { show: true,  required: false },
+    address: { show: false, required: false },
   };
 }
+// 旧構造(photo_min/photo_max/contact_either_required/contact[])も読めるよう正規化。
+function normalizeFormConfig(raw) {
+  const d = defaultFormConfig();
+  if (!raw || typeof raw !== 'object') return d;
+  // 新構造ならそのままマージ
+  const c = {
+    photo: { enabled: raw.photo?.enabled ?? (raw.photo_min != null || raw.photo_max != null ? true : d.photo.enabled),
+             min: Number(raw.photo?.min ?? raw.photo_min ?? d.photo.min),
+             max: Number(raw.photo?.max ?? raw.photo_max ?? d.photo.max) },
+    video: { enabled: raw.video?.enabled ?? d.video.enabled,
+             min: Number(raw.video?.min ?? d.video.min),
+             max: Number(raw.video?.max ?? d.video.max) },
+    phone:   { show: raw.phone?.show ?? true,   required: raw.phone?.required ?? false },
+    email:   { show: raw.email?.show ?? true,   required: raw.email?.required ?? false },
+    address: { show: raw.address?.show ?? false, required: raw.address?.required ?? false },
+  };
+  // 旧 contact_either_required の名残があれば、電話/メールを両方表示・任意（従来動作に近い）に寄せる。
+  // クランプ
+  c.photo.min = Math.max(0, Math.min(20, Number.isFinite(c.photo.min) ? c.photo.min : 0));
+  c.photo.max = Math.max(c.photo.min, Math.min(20, Number.isFinite(c.photo.max) ? c.photo.max : 10));
+  c.video.min = Math.max(0, Math.min(10, Number.isFinite(c.video.min) ? c.video.min : 0));
+  c.video.max = Math.max(c.video.min, Math.min(10, Number.isFinite(c.video.max) ? c.video.max : 3));
+  // 旧 either 設定の互換フラグは保持（submitで参照可能に）
+  if (raw.contact_either_required != null) c.contact_either_required = raw.contact_either_required !== false;
+  return c;
+}
+// 後方互換のエイリアス（既存呼び出し名を温存）
+function defaultAssessmentFields() { return defaultFormConfig(); }
 
 // --- QR/URL作成（＝店舗の常設フォーム。キャンペーンには紐づかない。1店舗に複数可） ---
 // 開いた時にその店舗のアクティブなキャンペーンを自動表示するので、campaign_id は渡さない。
@@ -366,24 +386,14 @@ app.get('/api/stores/:id/form-config', async (req, res) => {
   if (await guardStore(req, res, req.params.id)) return;
   const store = await db.getStore(req.params.id);
   if (!store) return bad(res, 400, 'store_id が不正です');
-  ok(res, { config: await db.getSetting(store.id, 'form_config', defaultAssessmentFields()) });
+  ok(res, { config: normalizeFormConfig(await db.getSetting(store.id, 'form_config', defaultFormConfig())) });
 });
 app.post('/api/form-config', async (req, res) => {
   const b = req.body || {};
   if (await guardStore(req, res, b.store_id)) return;
   const store = await db.getStore(b.store_id);
   if (!store) return bad(res, 400, 'store_id が不正です');
-  const def = defaultAssessmentFields();
-  const cfg = { ...def, ...(b.config || {}) };
-  // 連絡先・商品項目が未指定/空なら既定で補完（フォームから項目が消えるのを防ぐ）
-  if (!Array.isArray(cfg.contact) || cfg.contact.length === 0) cfg.contact = def.contact;
-  if (!Array.isArray(cfg.item) || cfg.item.length === 0) cfg.item = def.item;
-  // 写真枚数の妥当性（0枚許可のため NaN のときだけ既定にフォールバック。|| だと 0 が 5 に化ける）
-  const nmin = Number(cfg.photo_min); const nmax = Number(cfg.photo_max);
-  cfg.photo_min = Math.max(0, Math.min(10, Number.isFinite(nmin) ? nmin : 5));
-  cfg.photo_max = Math.max(cfg.photo_min, Math.min(10, Number.isFinite(nmax) ? nmax : 10));
-  // 電話/メールのどちらか必須（未指定なら既定 true）
-  cfg.contact_either_required = cfg.contact_either_required !== false;
+  const cfg = normalizeFormConfig(b.config || {});
   ok(res, { config: await db.setSetting(store.id, 'form_config', cfg) });
 });
 
@@ -1012,19 +1022,27 @@ app.post('/api/f/:slug/submit', async (req, res) => {
   const b = req.body || {};
 
   // フォーム項目は「店舗の最新設定」を優先（QRは店舗常設なので発行時のスナップショットに固定しない）。
-  const cfg = await db.getSetting(store.id, 'form_config', form.fields || {});
-  // 写真（dataURL配列）を保存して URL に変換
-  const photoMin = Number(cfg.photo_min) || 0;
+  const cfg = normalizeFormConfig(await db.getSetting(store.id, 'form_config', form.fields || {}));
+  const c = b.contact || {};
+  // 氏名は常に必須
+  if (!(c.name || '').trim()) return bad(res, 400, 'お名前を入力してください');
+  // 電話/メール/住所: 表示ONかつ必須なら検証
+  if (cfg.phone.show && cfg.phone.required && !(c.tel || '').trim()) return bad(res, 400, '電話番号を入力してください');
+  if (cfg.email.show && cfg.email.required && !(c.email || '').trim()) return bad(res, 400, 'メールアドレスを入力してください');
+  if (cfg.address.show && cfg.address.required && !(c.address || '').trim()) return bad(res, 400, '住所を入力してください');
+  // 旧 either 互換（残っていれば電話orメールどちらか必須）
+  if (cfg.contact_either_required === true && cfg.phone.show && cfg.email.show
+      && !(c.tel || '').trim() && !(c.email || '').trim())
+    return bad(res, 400, '電話番号かメールアドレスのどちらか一方を入力してください');
+  // 写真: enabled時のみ、最小枚数を検証
   const photos = Array.isArray(b.photos) ? b.photos : [];
-  if (photoMin && photos.length < photoMin) return bad(res, 400, `写真は最低${photoMin}枚必要です`);
-  // 電話/メールのどちらか必須（保険。クライアント検証と同じ）
-  if (cfg.contact_either_required !== false) {
-    const tel = (b.contact?.tel || '').trim();
-    const email = (b.contact?.email || '').trim();
-    if (!tel && !email) return bad(res, 400, '電話番号かメールアドレスのどちらか一方を入力してください');
-  }
+  if (cfg.photo.enabled && cfg.photo.min && photos.length < cfg.photo.min) return bad(res, 400, `写真は最低${cfg.photo.min}枚必要です`);
+  // 動画: enabled時のみ、最小本数を検証
+  const videos = Array.isArray(b.videos) ? b.videos : [];
+  if (cfg.video.enabled && cfg.video.min && videos.length < cfg.video.min) return bad(res, 400, `動画は最低${cfg.video.min}本必要です`);
   const photoUrls = [];
-  for (const p of photos.slice(0, Number(cfg.photo_max) || 10)) {
+  const photoCap = cfg.photo.enabled ? cfg.photo.max : 0;
+  for (const p of photos.slice(0, photoCap)) {
     const m = /^data:image\/(png|jpe?g|webp);base64,(.+)$/i.exec(p || '');
     if (!m) continue;
     const ext = m[1].toLowerCase().replace('jpeg', 'jpg');
@@ -1044,7 +1062,27 @@ app.post('/api/f/:slug/submit', async (req, res) => {
     }
   }
 
-  const payload = { contact: b.contact || {}, item: b.item || {}, photos: photoUrls.filter(Boolean) };
+  // 動画（dataURL配列）を保存（enabled時のみ）。個人情報扱いで非公開バケット優先。
+  const videoUrls = [];
+  const videoCap = cfg.video.enabled ? cfg.video.max : 0;
+  for (const v of videos.slice(0, videoCap)) {
+    const m = /^data:video\/(mp4|quicktime|webm);base64,(.+)$/i.exec(v || '');
+    if (!m) continue;
+    const ext = m[1].toLowerCase() === 'quicktime' ? 'mov' : m[1].toLowerCase();
+    const buf = Buffer.from(m[2], 'base64');
+    if (buf.length > 60 * 1024 * 1024) continue; // 60MBまで
+    const rel = `${store.id}/submissions/${randomUUID()}.${ext}`;
+    if (storage.storageEnabled()) {
+      const savedPath = await storage.uploadPrivate(rel, buf, `video/${ext === 'mov' ? 'quicktime' : ext}`);
+      videoUrls.push(savedPath ? `storage:${savedPath}` : null);
+    } else {
+      const abs = join(__dirname, '..', '..', 'data', 'assets', rel);
+      mkdirSync(dirname(abs), { recursive: true }); writeFileSync(abs, buf);
+      videoUrls.push(`/assets/${rel}`);
+    }
+  }
+
+  const payload = { contact: b.contact || {}, item: b.item || {}, photos: photoUrls.filter(Boolean), videos: videoUrls.filter(Boolean) };
   const sub = await db.createSubmission({ lead_form_id: form.id, payload, utm: req.query || {} });
 
   // 送信先へ通知（メールはSMTP未設定のため記録のみ / LINE Notify / Webhook は送信）
@@ -1072,14 +1110,16 @@ app.get('/api/forms/:id/submissions', async (req, res) => {
 async function notifyDelivery({ store, form, payload, submissionId }) {
   const d = await db.getSetting(store.id, 'delivery', {});
   const base = process.env.PUBLIC_BASE_URL || BASE;
+  const cc = payload.contact || {};
   const lines = [
-    `【${store.name}】新しい査定申込`,
-    `お名前: ${payload.contact?.name || ''} / TEL: ${payload.contact?.tel || ''} / Mail: ${payload.contact?.email || ''}`,
-    `商品: ${payload.item?.item_name || ''}（状態:${payload.item?.condition || ''} 年式:${payload.item?.year || ''} 使用:${payload.item?.used_years || ''}）`,
-    `コメント: ${payload.item?.comment || ''}`,
-    `写真: ${(payload.photos || []).length}枚`,
+    `【${store.name}】新しいお申込み`,
+    `お名前: ${cc.name || ''}`,
+    cc.tel ? `電話: ${cc.tel}` : null,
+    cc.email ? `メール: ${cc.email}` : null,
+    cc.address ? `住所: ${cc.address}` : null,
+    `写真: ${(payload.photos || []).length}枚 / 動画: ${(payload.videos || []).length}本`,
     `詳細: ${base}/admin/submissions?form=${form.id}#${submissionId}`,
-  ];
+  ].filter(Boolean);
   const text = lines.join('\n');
   if (d.line_notify_token) {
     await fetch('https://notify-api.line.me/api/notify', {
@@ -1092,52 +1132,44 @@ async function notifyDelivery({ store, form, payload, submissionId }) {
     await fetch(d.webhook_url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ store: store.name, payload, submissionId }) }).catch(() => {});
   }
   if (d.email) {
+    // カンマ/読点/空白/改行区切りで複数宛先に対応。
+    const emails = String(d.email).split(/[,、\s]+/).map(s => s.trim()).filter(s => /@/.test(s));
     if (mailerEnabled()) {
       const detailUrl = `${base}/admin/submissions?form=${form.id}#${submissionId}`;
-      const okSent = await sendSubmissionNotice(d.email, {
-        storeName: store.name, contact: payload.contact || {}, item: payload.item || {},
-        photoCount: (payload.photos || []).length, detailUrl,
-      });
-      if (!okSent) console.error(`[メール通知] 送信失敗 to=${d.email}`);
+      for (const to of emails) {
+        const okSent = await sendSubmissionNotice(to, {
+          storeName: store.name, contact: payload.contact || {}, item: payload.item || {},
+          photoCount: (payload.photos || []).length, detailUrl,
+        });
+        if (!okSent) console.error(`[メール通知] 送信失敗 to=${to}`);
+      }
     } else {
-      // Resend未設定時は従来どおりログ記録（後方互換）
-      console.log(`[メール送信先 ${d.email}] へ通知（RESEND_API_KEY未設定のため記録のみ）:\n${text}`);
+      console.log(`[メール送信先 ${emails.join(', ')}] へ通知（RESEND_API_KEY未設定のため記録のみ）:\n${text}`);
     }
   }
 }
 
 // 公開フォームHTML（写真撮影+連絡先+商品情報。店舗別・キャンペーン反映・業態ライセンス表示）
 function renderPublicForm({ form, store, bt, campaign }) {
-  const cfg = form.fields || {};
-  const contact = cfg.contact || [];
-  const item = cfg.item || [];
-  const pmin = Number(cfg.photo_min) || 0;
-  const pmax = Number(cfg.photo_max) || 10;
-  const eitherReq = cfg.contact_either_required !== false; // 電話/メールどちらか必須
-  const licenseLines = bt.required_licenses
-    .map(l => `${l.label}: ${store.license_values[l.key] || '（未登録）'}`).join(' / ');
+  const cfg = normalizeFormConfig(form.fields || {});
+  const licenseLines = (bt.required_licenses || [])
+    .map(l => `${l.label}: ${store.license_values?.[l.key] || '（未登録）'}`).join(' / ');
+  const ctaLabel = bt.cta_default_label || '送信する';
 
-  const renderField = (f, group) => {
-    const name = `${group}.${f.key}`;
-    // 電話/メールは「どちらか必須」時はHTML required を付けず、注記だけ出す（送信時にJS/サーバで検証）
-    const isEither = eitherReq && group === 'contact' && (f.key === 'tel' || f.key === 'email');
-    const note = isEither ? '（電話・メールのどちらか必須）' : (f.required ? ' *' : '');
-    const req = f.required && !isEither ? 'required' : '';
-    if (f.type === 'select') {
-      const opts = (f.options || []).map(o => `<option value="${o}">${o}</option>`).join('');
-      return `<label class="fld"><span>${f.label}${note}</span><select name="${name}" ${req}><option value="">選択してください</option>${opts}</select></label>`;
-    }
-    if (f.type === 'textarea') {
-      return `<label class="fld"><span>${f.label}${note}</span><textarea name="${name}" rows="3" ${req}></textarea></label>`;
-    }
-    return `<label class="fld"><span>${f.label}${note}</span><input name="${name}" type="${f.type || 'text'}" ${req}></label>`;
-  };
-  const contactHtml = contact.map(f => renderField(f, 'contact')).join('');
-  const itemHtml = item.map(f => renderField(f, 'item')).join('');
+  // 連絡先フィールド（氏名は常に必須。電話/メール/住所は show/required 設定で出し分け）
+  const fld = (name, label, type, req) =>
+    `<label class="fld"><span>${label}${req ? ' <b style="color:#c0392b">*</b>' : ' <span style="color:#999">（任意）</span>'}</span><input name="${name}" type="${type}" ${req ? 'required' : ''}></label>`;
+  let contactHtml = fld('contact.name', 'お名前', 'text', true);
+  if (cfg.phone.show)   contactHtml += fld('contact.tel', '電話番号', 'tel', cfg.phone.required);
+  if (cfg.email.show)   contactHtml += fld('contact.email', 'メールアドレス', 'email', cfg.email.required);
+  if (cfg.address.show) contactHtml += fld('contact.address', 'ご住所', 'text', cfg.address.required);
+
+  const showPhoto = cfg.photo.enabled;
+  const showVideo = cfg.video.enabled;
 
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${store.name}｜${bt.cta_default_label}</title>
+<title>${store.name}｜${ctaLabel}</title>
 <style>
 :root{--bd:${store.brand_color || '#FFE600'};--bd-text:${contrastText(store.brand_color || '#FFE600')}}
 body{font-family:system-ui,'Chip Text',sans-serif;margin:0;background:#F4F4F4;color:#161616}
@@ -1153,6 +1185,7 @@ h1{font-size:20px;margin:0 0 8px}h2{font-size:14px;margin:20px 0 6px;border-left
 .photos .ph button{position:absolute;top:-6px;right:-6px;width:22px;height:22px;padding:0;border-radius:9999px;background:#161616;color:#fff;font-size:12px}
 .addph{display:inline-flex;align-items:center;justify-content:center;width:72px;height:72px;border:2px dashed #bbb;border-radius:10px;font-size:28px;color:#888;cursor:pointer}
 .pcount{font-size:12px;color:#666}
+.vitem{font-size:12px;color:#444;background:#f4f4f4;border-radius:8px;padding:6px 10px;margin:4px 0;display:flex;justify-content:space-between;align-items:center}
 button.submit{width:100%;padding:14px;border:0;border-radius:9999px;background:#161616;color:#fff;font-size:16px;font-weight:700;margin-top:16px;cursor:pointer}
 .lic{font-size:11px;color:#888;margin-top:16px;line-height:1.6}
 .done{text-align:center;padding:24px}
@@ -1160,45 +1193,69 @@ button.submit{width:100%;padding:14px;border:0;border-radius:9999px;background:#
 <h1>${store.name}</h1>
 ${campaign ? `<div class="cp">🎁 ${campaign.title}${campaign.detail ? `<br><small style="font-weight:400">${campaign.detail}</small>` : ''}</div>` : ''}
 <form id="f">
-  <h2>お品物の写真（${pmin}〜${pmax}枚）</h2>
+  ${showPhoto ? `<h2>写真（${cfg.photo.min}〜${cfg.photo.max}枚）</h2>
   <div class="pcount" id="pcount">0枚</div>
   <div class="photos" id="photos"></div>
-  <label class="addph" id="addph">＋<input id="pfile" type="file" accept="image/*" capture="environment" multiple style="display:none"></label>
+  <label class="addph" id="addph">＋<input id="pfile" type="file" accept="image/*" capture="environment" multiple style="display:none"></label>` : ''}
+  ${showVideo ? `<h2>動画（${cfg.video.min}〜${cfg.video.max}本）</h2>
+  <div class="pcount" id="vcount">0本</div>
+  <div id="videos"></div>
+  <label class="addph" id="addvd" style="width:auto;padding:0 14px">＋動画<input id="vfile" type="file" accept="video/*" capture="environment" multiple style="display:none"></label>` : ''}
   <h2>お客様情報</h2>${contactHtml}
-  <h2>商品情報</h2>${itemHtml}
-  <button type="submit" class="submit">${bt.cta_default_label}</button>
+  <button type="submit" class="submit">${ctaLabel}</button>
 </form>
 <div class="lic">${store.area ? store.area + '｜' : ''}${store.tel ? 'TEL ' + store.tel + '｜' : ''}${licenseLines}</div>
 </div></div>
 <script>
-const PMIN=${pmin}, PMAX=${pmax}, EITHER=${eitherReq};
-const photos=[];
+const SHOW_PHOTO=${showPhoto}, PMIN=${cfg.photo.min}, PMAX=${cfg.photo.max};
+const SHOW_VIDEO=${showVideo}, VMIN=${cfg.video.min}, VMAX=${cfg.video.max};
+const photos=[], videos=[];
 const $=id=>document.getElementById(id);
-$('addph').addEventListener('click',()=>$('pfile').click());
-$('pfile').addEventListener('change',async e=>{
-  for(const f of [...e.target.files]){
-    if(photos.length>=PMAX){alert('写真は最大'+PMAX+'枚です');break;}
-    const url=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
-    photos.push(url);
-  }
-  e.target.value='';render();
-});
-function render(){
-  $('photos').innerHTML=photos.map((u,i)=>'<div class="ph"><img src="'+u+'"><button type="button" onclick="rm('+i+')">×</button></div>').join('');
+if(SHOW_PHOTO){
+  $('addph').addEventListener('click',()=>$('pfile').click());
+  $('pfile').addEventListener('change',async e=>{
+    for(const f of [...e.target.files]){
+      if(photos.length>=PMAX){alert('写真は最大'+PMAX+'枚です');break;}
+      const url=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+      photos.push(url);
+    }
+    e.target.value='';renderP();
+  });
+}
+function renderP(){ if(!SHOW_PHOTO)return;
+  $('photos').innerHTML=photos.map((u,i)=>'<div class="ph"><img src="'+u+'"><button type="button" onclick="rmP('+i+')">×</button></div>').join('');
   $('pcount').textContent=photos.length+'枚'+(photos.length<PMIN?'（あと'+(PMIN-photos.length)+'枚必要）':'');
 }
-window.rm=i=>{photos.splice(i,1);render();};
+window.rmP=i=>{photos.splice(i,1);renderP();};
+if(SHOW_VIDEO){
+  $('addvd').addEventListener('click',()=>$('vfile').click());
+  $('vfile').addEventListener('change',async e=>{
+    for(const f of [...e.target.files]){
+      if(videos.length>=VMAX){alert('動画は最大'+VMAX+'本です');break;}
+      if(f.size>60*1024*1024){alert('動画は1本60MBまでです');continue;}
+      const url=await new Promise(r=>{const rd=new FileReader();rd.onload=()=>r(rd.result);rd.readAsDataURL(f);});
+      videos.push({name:f.name,url});
+    }
+    e.target.value='';renderV();
+  });
+}
+function renderV(){ if(!SHOW_VIDEO)return;
+  $('videos').innerHTML=videos.map((v,i)=>'<div class="vitem"><span>🎬 '+v.name+'</span><button type="button" onclick="rmV('+i+')">×</button></div>').join('');
+  $('vcount').textContent=videos.length+'本'+(videos.length<VMIN?'（あと'+(VMIN-videos.length)+'本必要）':'');
+}
+window.rmV=i=>{videos.splice(i,1);renderV();};
 function collect(prefix){const o={};document.querySelectorAll('[name^="'+prefix+'."]').forEach(el=>{o[el.name.split('.')[1]]=el.value;});return o;}
 $('f').addEventListener('submit',async e=>{e.preventDefault();
-  if(photos.length<PMIN){alert('写真を'+PMIN+'枚以上撮影/選択してください');return;}
+  if(SHOW_PHOTO&&photos.length<PMIN){alert('写真を'+PMIN+'枚以上添付してください');return;}
+  if(SHOW_VIDEO&&videos.length<VMIN){alert('動画を'+VMIN+'本以上添付してください');return;}
   const contact=collect('contact');
-  if(EITHER&&!(contact.tel||'').trim()&&!(contact.email||'').trim()){alert('電話番号かメールアドレスのどちらか一方を入力してください');return;}
-  const body={contact,item:collect('item'),photos};
+  if(!(contact.name||'').trim()){alert('お名前を入力してください');return;}
+  const body={contact,photos,videos:videos.map(v=>v.url)};
   const r=await fetch('/api/f/${form.public_slug}/submit'+location.search,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body)});
-  if(r.ok){document.querySelector('.card').innerHTML='<div class="done"><h1>送信しました</h1><p>お問い合わせありがとうございます。店舗よりご連絡します。</p></div>';}
+  if(r.ok){document.querySelector('.card').innerHTML='<div class="done"><h1>送信しました</h1><p>お問い合わせありがとうございます。担当者よりご連絡します。</p></div>';}
   else{const j=await r.json().catch(()=>({}));alert('送信に失敗しました: '+(j.error||''));}
 });
-render();
+renderP();renderV();
 </script></body></html>`;
 }
 

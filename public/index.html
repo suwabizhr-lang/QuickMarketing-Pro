@@ -130,18 +130,40 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div id="q_out" class="out" style="display:none"></div>
 
       <h3>申込フォーム設定</h3>
-      <div class="row">
-        <div><label>写真 最小枚数</label><input id="fc_min" type="number" min="0" max="10" value="5"></div>
-        <div><label>写真 最大枚数</label><input id="fc_max" type="number" min="1" max="10" value="10"></div>
+
+      <label class="switch" style="margin:6px 0"><input type="checkbox" id="fc_photo_on" checked style="width:auto" onchange="document.getElementById('fc_photo_box').style.display=this.checked?'flex':'none'"> 写真の添付欄を表示する</label>
+      <div class="row" id="fc_photo_box">
+        <div><label>写真 最小枚数</label><input id="fc_photo_min" type="number" min="0" max="20" value="0"></div>
+        <div><label>写真 最大枚数</label><input id="fc_photo_max" type="number" min="1" max="20" value="10"></div>
       </div>
-      <label class="switch" style="margin:10px 0"><input type="checkbox" id="fc_either" checked style="width:auto"> 電話番号とメールアドレスは<b>どちらか一方を必須</b>にする</label>
-      <p class="muted">お名前は必須です。上をONにすると、電話・メールの両方が空だと申込できません（査定結果などの連絡先を確保）。OFFなら両方任意になります。</p>
-      <button class="sm" onclick="saveFormConfig()">フォーム設定を保存</button>
+
+      <label class="switch" style="margin:12px 0 6px"><input type="checkbox" id="fc_video_on" style="width:auto" onchange="document.getElementById('fc_video_box').style.display=this.checked?'flex':'none'"> 動画の添付欄を表示する</label>
+      <div class="row" id="fc_video_box" style="display:none">
+        <div><label>動画 最小本数</label><input id="fc_video_min" type="number" min="0" max="10" value="0"></div>
+        <div><label>動画 最大本数</label><input id="fc_video_max" type="number" min="1" max="10" value="3"></div>
+      </div>
+
+      <h4 style="margin:14px 0 4px;font-size:13px">お客様情報の項目</h4>
+      <p class="muted" style="margin:0 0 8px">お名前は常に必須です。以下は「表示するか」を選び、表示する場合に「必須か任意か」を選べます。</p>
+      <div class="row" style="align-items:center">
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_phone_show" checked style="width:auto" onchange="document.getElementById('fc_phone_req').disabled=!this.checked"> 電話番号を表示</label>
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_phone_req" style="width:auto"> 必須にする</label>
+      </div>
+      <div class="row" style="align-items:center">
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_email_show" checked style="width:auto" onchange="document.getElementById('fc_email_req').disabled=!this.checked"> メールアドレスを表示</label>
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_email_req" style="width:auto"> 必須にする</label>
+      </div>
+      <div class="row" style="align-items:center">
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_addr_show" style="width:auto" onchange="document.getElementById('fc_addr_req').disabled=!this.checked"> 住所を表示</label>
+        <label class="switch" style="margin:4px 0"><input type="checkbox" id="fc_addr_req" style="width:auto" disabled> 必須にする</label>
+      </div>
+
+      <button class="sm" style="margin-top:12px" onclick="saveFormConfig()">フォーム設定を保存</button>
       <div id="fc_out" class="out" style="display:none"></div>
 
       <h3>応募の送信先</h3>
       <div class="row">
-        <div><label>通知メール（記録のみ）</label><input id="dv_email" type="email" placeholder="store@example.com"></div>
+        <div><label>通知メール（複数可・カンマ区切り）</label><input id="dv_email" placeholder="a@example.com, b@example.com"></div>
         <div><label>LINE Notify トークン</label><input id="dv_line" placeholder="任意"></div>
       </div>
       <label>Webhook URL（任意）</label><input id="dv_webhook" placeholder="https://...">

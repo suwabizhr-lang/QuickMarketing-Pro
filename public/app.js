@@ -136,7 +136,7 @@ function newStore() {
   $('storeSel').value = '';
   $('s_name').value = ''; $('s_area').value = ''; $('s_tel').value = ''; $('s_color').value = '#FFE600';
   renderLicenses();
-  $('s_save').textContent = '店舗を作成';
+  $('s_save').textContent = '新規登録する';
   $('s_delbox').style.display = 'none';
   $('s_out').style.display = 'none';
   setView('reg');
@@ -291,7 +291,7 @@ async function saveStore() {
       business_type_id: btId, name: $('s_name').value.trim(), area: $('s_area').value.trim(),
       tel: $('s_tel').value.trim(), brand_color: $('s_color').value, license_values: licenses,
     };
-    if (!payload.name) { alert('店名を入力してください'); return; }
+    if (!payload.name) { alert('店舗名（ブランド・会社等の名称）を入力してください'); return; }
     let store, isNew;
     if (state.store) {
       isNew = false;

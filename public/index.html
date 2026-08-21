@@ -95,13 +95,13 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   <!-- ============ 登録ビュー ============ -->
   <section class="view" id="view-reg">
     <div class="step">
-      <h2><span class="no">店</span>店舗を登録 / 編集</h2>
-      <p class="muted">ヘッダーで店舗を選ぶと編集、「＋新規」で新しい店舗を登録します。</p>
+      <h2><span class="no">店</span>店舗（ブランド・会社等の名称）を登録 / 編集</h2>
+      <p class="muted">ヘッダーで対象を選ぶと編集、「＋新規」で新しく登録します。</p>
       <div style="margin:6px 0"><button class="sm ghost" onclick="newStore()">＋ 新規で登録する</button></div>
       <hr style="border:0;border-top:1px solid #eee;margin:12px 0">
       <div class="row">
-        <div><label>業態</label><select id="s_bt"></select></div>
-        <div><label>店名</label><input id="s_name" placeholder="○○買取センター"></div>
+        <div><label>業種</label><select id="s_bt"></select></div>
+        <div><label>店舗名（ブランド・会社等の名称）</label><input id="s_name" placeholder="例: ○○ストア / 株式会社△△ / □□サロン"></div>
       </div>
       <div class="row">
         <div><label>エリア</label><input id="s_area" placeholder="渋谷区"></div>
@@ -112,7 +112,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
         <div><label>ブランドカラー</label><input id="s_color" type="color" value="#FFE600"></div>
         <div><label>店舗ロゴ（動画に合成・任意）</label><input id="s_logo" type="file" accept="image/*" onchange="uploadLogo()"><span id="s_logo_out" class="muted"></span></div>
       </div>
-      <button class="y" id="s_save" onclick="saveStore()">店舗を作成</button>
+      <button class="y" id="s_save" onclick="saveStore()">新規登録する</button>
       <span id="s_delbox" style="display:none;margin-left:10px">
         <button class="sm ghost" onclick="deleteStore(false)">この店舗を削除</button>
         <button class="sm" style="background:#c0392b" onclick="deleteStore(true)">関連ごとすべて削除</button>
@@ -404,7 +404,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       </div>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_bgm_on" checked style="width:auto"> BGMを付ける</label>
 
-      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に店名のオープニング面を入れる</label>
+      <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_opening" checked style="width:auto"> 冒頭に名称（店舗・ブランド名）のオープニング面を入れる</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_telop" checked style="width:auto"> テロップ（字幕）を表示する</label>
       <label class="switch" style="margin:8px 0"><input type="checkbox" id="avd_narration" style="width:auto" onchange="document.getElementById('avd_narrbox').style.display=this.checked?'block':'none'"> AIナレーションを入れる（上の「テロップ／ナレーション文言」を音声で読み上げます）</label>
       <div id="avd_narrbox" style="display:none;margin:4px 0 8px">

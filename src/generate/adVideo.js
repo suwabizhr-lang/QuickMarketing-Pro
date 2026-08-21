@@ -21,7 +21,7 @@ export async function buildCaptions({ store, campaign, template, style, extra, b
 # 事業者
 - 名称: ${store.name} / エリア: ${store.area || '未設定'}${biz ? ` / 業種: ${biz}` : ''}
 # 訴求（キャンペーン）
-- ${campaign ? `${campaign.title}｜${campaign.detail || ''}` : (extra ? '（下記の追加指示に沿って訴求）' : 'おすすめ・キャンペーン')}
+- ${campaign ? `${campaign.title}${campaign.discount_type ? `（種別: ${campaign.discount_type}）` : ''}｜${campaign.detail || ''}` : (extra ? '（下記の追加指示に沿って訴求）' : 'おすすめ・キャンペーン')}
 ${extra ? `# 追加指示（最優先で反映）\n- ${extra}` : ''}
 ${styleLine ? `# ${styleLine}` : ''}
 

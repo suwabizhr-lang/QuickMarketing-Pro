@@ -65,7 +65,7 @@ ${biz ? `- 業種: ${biz}` : '- 業種: （指定なし。特定業種を勝手�
 
 # 訴求（キャンペーン）
 - タイトル: ${campaign?.title || (extra ? '（追加の指示に沿って訴求）' : 'おすすめ・キャンペーン')}
-- 詳細: ${campaign?.detail || '（なし）'}
+${campaign?.discount_type ? `- 種別: ${campaign.discount_type}\n` : ''}- 詳細: ${campaign?.detail || '（なし）'}
 - 有効期限: ${campaign?.valid_to || '（未設定）'}
 ${extra ? `- 追加の指示（最優先で反映）: ${extra}` : ''}
 

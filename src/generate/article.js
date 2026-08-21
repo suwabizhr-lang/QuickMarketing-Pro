@@ -59,7 +59,7 @@ ${biz ? `- 業種: ${biz}` : '- 業種: （指定なし。特定業種を勝手�
 
 # 今日の訴求（キャンペーン）
 - タイトル: ${campaign.title}
-- 詳細: ${campaign.detail || '（なし）'}
+${campaign.discount_type ? `- 種別: ${campaign.discount_type}\n` : ''}- 詳細: ${campaign.detail || '（なし）'}
 - 有効期限: ${campaign.valid_to || '（未設定）'}
 
 # この媒体の書き方

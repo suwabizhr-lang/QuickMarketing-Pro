@@ -86,8 +86,10 @@
     };
 
     function wireLogout() {
-      var btn = document.getElementById('logoutBtn');
-      if (btn) { btn.style.display = ''; btn.addEventListener('click', function () { window.__auth.logout(); }); }
+      ['logoutBtn', 'logoutBtnM'].forEach(function (id) {
+        var btn = document.getElementById(id);
+        if (btn) { btn.style.display = ''; btn.addEventListener('click', function () { window.__auth.logout(); }); }
+      });
     }
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireLogout);
     else wireLogout();

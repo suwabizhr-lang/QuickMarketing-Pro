@@ -156,6 +156,38 @@ async function api(path, method='GET', body) {
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function newLic(){ return { key:'field_'+Math.random().toString(36).slice(2,7), label:'', hint:'', pattern:'', required:true }; }
 
+// 代表的な形式プリセット（選ぶと pattern と hint を自動入力）。
+const PATTERN_PRESETS = [
+  { key:'',          label:'（形式チェックなし）',        pattern:'',                          hint:'' },
+  { key:'digits12',  label:'数字12桁（古物商許可番号）',   pattern:'^\\d{12}$',                 hint:'12桁の数字' },
+  { key:'digits',    label:'数字のみ（桁数自由）',         pattern:'^\\d+$',                    hint:'数字のみ' },
+  { key:'digits_hyphen', label:'数字とハイフン（許可番号等）', pattern:'^[0-9\\-]+$',           hint:'数字とハイフン' },
+  { key:'tel',       label:'電話番号（ハイフンあり/なし）', pattern:'^0\\d{1,4}-?\\d{1,4}-?\\d{3,4}$', hint:'例: 03-1234-5678' },
+  { key:'email',     label:'メールアドレス',              pattern:'^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', hint:'例: info@example.com' },
+  { key:'url',       label:'URL',                        pattern:'^https?://.+',              hint:'http(s)://で始まる' },
+  { key:'postal',    label:'郵便番号（7桁/ハイフン可）',   pattern:'^\\d{3}-?\\d{4}$',          hint:'例: 123-4567' },
+  { key:'zenkaku',   label:'全角文字（氏名・名称など）',   pattern:'^[^\\x01-\\x7E]+$',         hint:'全角で入力' },
+  { key:'takken',    label:'宅建業免許番号',              pattern:'^.+第\\d+号$',              hint:'例: 東京都知事(1)第00000号' },
+  { key:'invoice',   label:'インボイス登録番号（T+13桁）', pattern:'^T\\d{13}$',                hint:'例: T1234567890123' },
+  { key:'corp',      label:'法人番号（13桁）',            pattern:'^\\d{13}$',                 hint:'13桁の数字' },
+];
+// pattern文字列からプリセットkeyを逆引き（一致しなければ 'custom'）。
+function presetKeyOf(pattern) {
+  const p = (pattern||'').trim();
+  if (!p) return '';
+  const hit = PATTERN_PRESETS.find(x => x.pattern === p);
+  return hit ? hit.key : 'custom';
+}
+// プリセット選択時: pattern と（空なら）hint を該当データ配列へ反映。
+function applyPreset(scope, i, key) {
+  const arr = scope==='na' ? NA_LICS : ED_LICS;
+  if (key === 'custom') return; // カスタムは手入力のまま
+  const ps = PATTERN_PRESETS.find(x => x.key === key) || PATTERN_PRESETS[0];
+  arr[i].pattern = ps.pattern;
+  if (!(arr[i].hint||'').trim() && ps.hint) arr[i].hint = ps.hint; // ヒント未入力なら補完
+  (scope==='na' ? naRenderLics : edRenderLics)();
+}
+
 function switchTab(t) {
   document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab===t));
   $('pane-list').classList.toggle('active', t==='list');
@@ -281,12 +313,22 @@ async function edSave() {
 function licBuilderRow(scope, i, l) {
   const arr = scope==='na' ? 'NA_LICS' : 'ED_LICS';
   const rm = scope==='na' ? 'naRmLic' : 'edRmLic';
-  return `<div class="row licrow">
-    <div style="flex:2"><label>項目名</label><input value="${esc(l.label||'')}" placeholder="例: 古物商許可番号" oninput="${arr}[${i}].label=this.value"></div>
-    <div style="flex:2"><label>ヒント（任意）</label><input value="${esc(l.hint||'')}" placeholder="例: 12桁の数字" oninput="${arr}[${i}].hint=this.value"></div>
-    <div style="flex:2"><label>形式チェック 正規表現（任意）</label><input value="${esc(l.pattern||'')}" placeholder="例: ^\\d{12}$" oninput="${arr}[${i}].pattern=this.value"></div>
-    <div style="flex:0 0 auto;text-align:center"><label>必須</label><input type="checkbox" ${l.required!==false?'checked':''} style="width:auto;transform:scale(1.3)" onchange="${arr}[${i}].required=this.checked"></div>
-    <div style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" onclick="${rm}(${i})">×</button></div>
+  const curKey = presetKeyOf(l.pattern);
+  const opts = PATTERN_PRESETS.map(p => `<option value="${p.key}" ${curKey===p.key?'selected':''}>${esc(p.label)}</option>`).join('')
+    + `<option value="custom" ${curKey==='custom'?'selected':''}>（自分で入力）</option>`;
+  return `<div class="licrow" style="padding:10px">
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:2"><label>項目名</label><input value="${esc(l.label||'')}" placeholder="例: 古物商許可番号" oninput="${arr}[${i}].label=this.value"></div>
+      <div style="flex:2"><label>ヒント（任意）</label><input value="${esc(l.hint||'')}" placeholder="例: 12桁の数字" oninput="${arr}[${i}].hint=this.value"></div>
+      <div style="flex:0 0 auto;text-align:center"><label>必須</label><input type="checkbox" ${l.required!==false?'checked':''} style="width:auto;transform:scale(1.3)" onchange="${arr}[${i}].required=this.checked"></div>
+      <div style="flex:0 0 auto"><label>&nbsp;</label><button class="ghost" onclick="${rm}(${i})">×</button></div>
+    </div>
+    <div class="row" style="align-items:flex-end;margin-top:6px">
+      <div style="flex:2"><label>入力形式（選ぶと自動設定）</label>
+        <select onchange="applyPreset('${scope}',${i},this.value)">${opts}</select></div>
+      <div style="flex:3"><label>正規表現（任意・上で選ぶと自動。手入力も可）</label>
+        <input value="${esc(l.pattern||'')}" placeholder="空欄=形式チェックなし" oninput="${arr}[${i}].pattern=this.value"></div>
+    </div>
   </div>`;
 }
 function cleanLics(arr) {

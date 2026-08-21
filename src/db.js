@@ -47,7 +47,7 @@ export async function upsertBusinessType(bt) {
     VALUES ($1,$2,$3,$4,$5)
     ON CONFLICT(id) DO UPDATE SET name=excluded.name, required_licenses=excluded.required_licenses,
       cta_default_label=excluded.cta_default_label, form_kind_default=excluded.form_kind_default`,
-    [bt.id, bt.name, J.str(bt.required_licenses ?? []), bt.cta_default_label ?? 'この店に今すぐ査定', bt.form_kind_default ?? 'assessment']);
+    [bt.id, bt.name, J.str(bt.required_licenses ?? []), bt.cta_default_label ?? '詳しくはこちら', bt.form_kind_default ?? 'contact']);
   return getBusinessType(bt.id);
 }
 export async function getBusinessType(id) {
@@ -163,7 +163,7 @@ export async function createLeadForm(f) {
   const slug = f.public_slug || Math.random().toString(36).slice(2, 8);
   await q(`INSERT INTO lead_form (id,store_id,label,kind,fields,public_slug,created_at)
     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [id, f.store_id, f.label ?? '査定フォーム', f.kind ?? 'assessment', J.str(f.fields ?? {}), slug, now()]);
+    [id, f.store_id, f.label ?? 'お問い合わせフォーム', f.kind ?? 'contact', J.str(f.fields ?? {}), slug, now()]);
   return getLeadForm(id);
 }
 export async function getLeadForm(id) {

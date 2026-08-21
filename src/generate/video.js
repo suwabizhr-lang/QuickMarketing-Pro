@@ -157,7 +157,7 @@ async function buildClipSlide({ clipPath, telopText, position, dur, tmp, idx, w 
 async function buildCta({ ctaUrl, ctaLabel, dur, tmp, w = W, h = H }) {
   const seg = join(tmp, 'seg_cta.mp4');
   const telop = join(tmp, 'telop_cta.png');
-  writeFileSync(telop, await telopPng({ text: ctaLabel || 'この店に今すぐ査定', position: 'top', style: 'band', width: w, height: h }));
+  writeFileSync(telop, await telopPng({ text: ctaLabel || '詳しくはこちら', position: 'top', style: 'band', width: w, height: h }));
   const url = (ctaUrl || '').trim();
   // QRサイズは短辺の約6割（比率が変わっても収まるように）
   const qrSize = Math.round(Math.min(w, h) * 0.63);
@@ -222,7 +222,7 @@ async function buildOpening({ storeName, brandColor, dur, tmp, w = W, h = H }) {
  * @returns {Promise<{path:string, seconds:number, slides:number, bgm:boolean}>}
  */
 export async function generateSlideshow({
-  storeId, brandColor = '#FFE600', ctaUrl, ctaLabel = 'この店に今すぐ査定',
+  storeId, brandColor = '#FFE600', ctaUrl, ctaLabel = '詳しくはこちら',
   images = [], captions = [], perSlide = 4, autoBgm = true, bgmPath = null,
   width = W, height = H, // 比率対応: 9:16=1080x1920 / 1:1=1080x1080 / 16:9=1920x1080
   transition = 'fade',   // スライド間xfadeの種類（fade/dissolve/slideleft/wipeleft/...）

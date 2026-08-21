@@ -52,21 +52,22 @@ function styleHint(style) {
   return bits.filter(Boolean).length ? `\n# 文体の希望\n- ${bits.filter(Boolean).join(' / ')}` : '';
 }
 
-function buildPrompt({ store, campaign, media, ctaUrl, style, extra }) {
+function buildPrompt({ store, campaign, media, ctaUrl, style, extra, bizType }) {
   const f = AD_FORMATS[media] || AD_FORMATS.instagram;
   const specLines = Object.entries(f.spec).map(([k, v]) => `  - ${k}: ${v}`).join('\n');
-  return `あなたは反応率の高い広告を書くプロのコピーライターです。買取店の【${f.label}】として、そのままコピペして入稿できる広告文を作成してください。
+  const biz = (bizType || '').trim();
+  return `あなたは反応率の高い広告を書くプロのコピーライターです。事業者の【${f.label}】として、そのままコピペして入稿できる広告文を作成してください。
 
-# 店舗
-- 店名: ${store.name}
+# 事業者
+- 名称: ${store.name}
 - エリア: ${store.area || '（未設定）'}
-- 業種: 買取店
+${biz ? `- 業種: ${biz}` : '- 業種: （指定なし。特定業種を勝手に想定しない）'}
 
 # 訴求（キャンペーン）
-- タイトル: ${campaign?.title || '買取キャンペーン'}
+- タイトル: ${campaign?.title || (extra ? '（追加の指示に沿って訴求）' : 'おすすめ・キャンペーン')}
 - 詳細: ${campaign?.detail || '（なし）'}
 - 有効期限: ${campaign?.valid_to || '（未設定）'}
-${extra ? `- 追加の指示: ${extra}` : ''}
+${extra ? `- 追加の指示（最優先で反映）: ${extra}` : ''}
 
 # この媒体の広告ガイド
 ${f.guide}
@@ -74,38 +75,42 @@ ${f.guide}
 ${specLines}
 ${styleHint(style)}
 
+# 重要な制約
+- 業種は上記のとおり。特定業種（例: 買取・査定など）を勝手に想定せず、与えられた情報と追加指示だけに忠実に。業種不明なら中立的で汎用的な表現にする。
+
 # 出力ルール（重要）
 - 次の構成要素を、それぞれ見出しを付けて出力してください: ${f.parts.map(p => `【${p}】`).join(' ')}
 - 各要素はそのままコピペして各枠に貼れる形に。余計な説明や前置きは書かない。
-- 誇大表現・断定的な買取額保証は避ける（景表法配慮）。
+- 誇大表現・断定的な効果保証は避ける（景表法配慮）。
 ${ctaUrl ? `- CTA先URL: ${ctaUrl} を本文/説明文の適切な位置に自然に含める。` : '- URLの記載は不要（枠側で設定するため）。'}
-${f.spec.hashtags ? `- ハッシュタグは${f.spec.hashtags}個ほど。` : '- ハッシュタグは不要。'}`;
+${f.spec.hashtags ? `- ハッシュタグは${f.spec.hashtags}個ほど（業種・訴求に合ったもの）。` : '- ハッシュタグは不要。'}`;
 }
 
-// キー未設定時の簡易フォールバック（媒体別に最低限コピペできる雛形）
+// キー未設定時の簡易フォールバック（媒体別に最低限コピペできる雛形）。業種非依存の中立表現。
 function fallback({ store, campaign, media, ctaUrl }) {
   const nm = store.name; const area = store.area ? `（${store.area}）` : '';
-  const title = campaign?.title || '買取キャンペーン実施中';
-  const detail = campaign?.detail || 'お得にお売りいただけます';
-  const url = ctaUrl ? `\n▼今すぐ査定\n${ctaUrl}` : '';
+  const title = campaign?.title || 'お知らせ';
+  const detail = campaign?.detail || 'ぜひこの機会にご利用ください';
+  const url = ctaUrl ? `\n▼詳しくはこちら\n${ctaUrl}` : '';
+  const tag = (store.area || '').replace(/\s/g, '');
   switch (media) {
     case 'x':
-      return `【ポスト本文】\n${title}｜${nm}${area}。${detail}${url}\n\n【ハッシュタグ】\n#買取 #出張買取`;
+      return `【ポスト本文】\n${title}｜${nm}${area}。${detail}${url}${tag ? `\n\n【ハッシュタグ】\n#${tag}` : ''}`;
     case 'line':
-      return `【タイトル】\n${title}\n\n【説明文】\n${nm}${area}。${detail}\n\n【本文(配信用)】\n${nm}です。${title}を実施中！${detail}${url}`;
+      return `【タイトル】\n${title}\n\n【説明文】\n${nm}${area}。${detail}\n\n【本文(配信用)】\n${nm}です。${title}のお知らせです。${detail}${url}`;
     case 'facebook':
-      return `【メインテキスト】\n${title}｜${nm}${area}\n\n【見出し】\n${title}\n\n【説明文】\n${detail}\n\n【本文】\nいつもありがとうございます。${nm}${area}です。${title}を実施しております。${detail}${url}`;
+      return `【メインテキスト】\n${title}｜${nm}${area}\n\n【見出し】\n${title}\n\n【説明文】\n${detail}\n\n【本文】\nいつもありがとうございます。${nm}${area}です。${title}のお知らせです。${detail}${url}`;
     default: // instagram
-      return `【メインテキスト】\n${title}✨ ${nm}${area}\n\n【キャプション（本文）】\n${title}を実施中！\n${detail}${url}\n\n【ハッシュタグ】\n#買取 #出張買取 #${(store.area || '').replace(/\s/g, '') || '買取店'}\n\n【見出し(任意)】\n${title}`;
+      return `【メインテキスト】\n${title}✨ ${nm}${area}\n\n【キャプション（本文）】\n${title}のお知らせ！\n${detail}${url}${tag ? `\n\n【ハッシュタグ】\n#${tag}` : ''}\n\n【見出し(任意)】\n${title}`;
   }
 }
 
 // メイン。指定メディアの広告文（コピペ用・見出し付き）を返す。
-export async function generateAdCopy({ store, campaign, media, ctaUrl, style, extra }) {
+export async function generateAdCopy({ store, campaign, media, ctaUrl, style, extra, bizType }) {
   if (!AD_FORMATS[media]) media = 'instagram';
   if (!hasKey()) return { media, body: fallback({ store, campaign, media, ctaUrl }), source: 'fallback' };
   try {
-    const text = await generateText(buildPrompt({ store, campaign, media, ctaUrl, style, extra }), { maxTokens: 1600 });
+    const text = await generateText(buildPrompt({ store, campaign, media, ctaUrl, style, extra, bizType }), { maxTokens: 1600 });
     if (!text) throw new Error('empty');
     return { media, body: text, source: 'ai' };
   } catch (e) {
@@ -114,7 +119,7 @@ export async function generateAdCopy({ store, campaign, media, ctaUrl, style, ex
 }
 
 // 複数メディアを同時生成
-export async function generateAdCopies({ store, campaign, medias, ctaUrl, style, extra }) {
+export async function generateAdCopies({ store, campaign, medias, ctaUrl, style, extra, bizType }) {
   const list = (medias && medias.length ? medias : ['instagram']).filter(m => AD_FORMATS[m]);
-  return Promise.all(list.map(media => generateAdCopy({ store, campaign, media, ctaUrl, style, extra })));
+  return Promise.all(list.map(media => generateAdCopy({ store, campaign, media, ctaUrl, style, extra, bizType })));
 }

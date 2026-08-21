@@ -475,7 +475,8 @@ app.post('/api/article/write', async (req, res) => {
   if (['continue', 'polish', 'expand', 'shorten', 'restyle'].includes(action) && !(b.current_body || '').trim())
     return bad(res, 400, '対象の本文がありません');
   const style = await db.getSetting(store.id, 'article_style', {});
-  const r = await writeArticle({ store, style, action, theme: b.theme, currentBody: b.current_body, instruction: b.instruction });
+  const bt = await db.getBusinessType(store.business_type_id);
+  const r = await writeArticle({ store, style, action, theme: b.theme, currentBody: b.current_body, instruction: b.instruction, bizType: bt?.name });
   ok(res, { body: r.body, source: r.source, warning: r.error || null });
 });
 
@@ -570,7 +571,8 @@ app.post('/api/generate/ad-copy', async (req, res) => {
   const campaign = b.campaign_id ? await db.getCampaign(b.campaign_id) : null;
   const ctaUrl = b.form_slug ? `${BASE}/f/${b.form_slug}` : null;
   const style = await db.getSetting(store.id, 'article_style', {}); // 文体プロファイルを流用（任意）
-  const results = await generateAdCopies({ store, campaign, medias, ctaUrl, style, extra: (b.extra || '').trim() });
+  const bt = await db.getBusinessType(store.business_type_id);
+  const results = await generateAdCopies({ store, campaign, medias, ctaUrl, style, extra: (b.extra || '').trim(), bizType: bt?.name });
   ok(res, { results: results.map(r => ({ media: r.media, label: (AD_FORMATS[r.media] || {}).label || r.media, body: r.body, source: r.source, warning: r.error || null })), url: ctaUrl });
 });
 
@@ -600,7 +602,8 @@ app.post('/api/ad-video/captions', async (req, res) => {
   const campaign = b.campaign_id ? await db.getCampaign(b.campaign_id) : null;
   const template = getAdVideoTemplate(b.template || 'standard') || getAdVideoTemplate('standard');
   const style = await db.getSetting(store.id, 'article_style', {});
-  const captions = await buildCaptions({ store, campaign, template, style, extra: (b.extra || '').trim() });
+  const bt = await db.getBusinessType(store.business_type_id);
+  const captions = await buildCaptions({ store, campaign, template, style, extra: (b.extra || '').trim(), bizType: bt?.name });
   ok(res, { captions, scenes: template.scenes.map(s => s.kind) });
 });
 // 話速ラベル→倍率。
@@ -652,7 +655,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
   try {
     const r = await generateAdVideo({
       store, campaign, templateKey: b.template || 'standard', aspect: b.aspect || '9:16',
-      ctaUrl, ctaLabel: bt?.cta_default_label, style, extra: (b.extra || '').trim(),
+      ctaUrl, ctaLabel: b.cta_label || null, style, extra: (b.extra || '').trim(), bizType: bt?.name,
       captions: Array.isArray(b.captions) ? b.captions : null, // ユーザー編集テロップ（あれば優先）
       images, clips, clipSeconds, clipSpeeds, colorGrade, logoPath,
       logoPos: b.logo_pos || 'top-right', logoSize: b.logo_size || 'medium',
@@ -686,7 +689,7 @@ app.post('/api/generate/article', async (req, res) => {
 
   // channels[] を優先。旧 channel（単数）も後方互換で受ける。
   const channels = Array.isArray(b.channels) && b.channels.length ? b.channels : [b.channel || 'instagram'];
-  const results = await generateArticles({ store, campaign, channels });
+  const results = await generateArticles({ store, campaign, channels, bizType: bt?.name });
 
   const ctaUrl = b.form_slug ? `${BASE}/f/${b.form_slug}` : null;
   const posts = await Promise.all(results.map(async r => {
@@ -884,7 +887,7 @@ app.post('/api/generate/video', async (req, res) => {
   try {
     const { path, seconds, slides, bgm } = await generateSlideshow({
       storeId: store.id, brandColor: store.brand_color, ctaUrl,
-      ctaLabel: bt?.cta_default_label || 'この店に今すぐ査定',
+      ctaLabel: bt?.cta_default_label || '詳しくはこちら',
       images, captions, perSlide: Math.max(2, Math.min(8, Number(b.per_slide) || 4)),
       autoBgm, bgmPath,
     });
@@ -1159,15 +1162,17 @@ async function start() {
   await db.ensureSchema();
   try { await storage.ensureBuckets(); } catch (e) { console.error('Storageバケット作成', e.message); } // 公開/非公開バケット（冪等）
   if ((await db.listBusinessTypes()).length === 0) {
-    await db.upsertBusinessType({
-      id: 'kaitori', name: '買取店',
-      required_licenses: [{ key: 'antique_dealer', label: '古物商許可番号', pattern: '^\\d{12}$', hint: '12桁の数字' }],
-      cta_default_label: 'この店に今すぐ査定', form_kind_default: 'assessment',
-    });
+    // 業態非依存。初期は汎用の業種を用意（ユーザーが自由に追加/選択できる）。
+    await db.upsertBusinessType({ id: 'general', name: '一般（業種を選ばない）', required_licenses: [], cta_default_label: '詳しくはこちら', form_kind_default: 'contact' });
+    await db.upsertBusinessType({ id: 'retail', name: '小売・EC', required_licenses: [], cta_default_label: '詳しくはこちら', form_kind_default: 'contact' });
+    await db.upsertBusinessType({ id: 'restaurant', name: '飲食店', required_licenses: [], cta_default_label: 'ご予約・お問い合わせ', form_kind_default: 'contact' });
+    await db.upsertBusinessType({ id: 'beauty', name: '美容・サロン', required_licenses: [], cta_default_label: 'ご予約はこちら', form_kind_default: 'contact' });
+    await db.upsertBusinessType({ id: 'service', name: 'サービス・専門業', required_licenses: [], cta_default_label: 'お問い合わせ', form_kind_default: 'contact' });
+    await db.upsertBusinessType({ id: 'kaitori', name: '買取店', required_licenses: [{ key: 'antique_dealer', label: '古物商許可番号', pattern: '^\\d{12}$', hint: '12桁の数字' }], cta_default_label: '今すぐ無料査定', form_kind_default: 'assessment' });
   }
   const server = app.listen(PORT, () => {
-    console.log(`買取店マーケティングシステム 起動: ${BASE}`);
-    console.log(`Claude: ${process.env.ANTHROPIC_API_KEY ? '有効' : '未設定（記事はテンプレ生成）'}`);
+    console.log(`QuickMarketing-Pro 起動: ${BASE}`);
+    console.log(`AI文言: ${(process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY) ? '有効' : '未設定（テンプレ生成）'}`);
     console.log(`認証: ${authEnabled() ? 'ON（Supabase）' : 'OFF（local）'}`);
     startScheduler(); // 記事の自動生成スケジューラ（アプリ起動中のみ稼働）
   });

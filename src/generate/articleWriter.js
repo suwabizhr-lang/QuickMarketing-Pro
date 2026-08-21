@@ -30,15 +30,16 @@ function styleGuide(style = {}) {
   return { guideLines: lines.join('\n'), sampleBlock };
 }
 
-function storeBlock(store = {}) {
-  return `# 店舗\n- 店名: ${store.name || ''}\n- エリア: ${store.area || '（未設定）'}\n- 業種: 買取店`;
+function storeBlock(store = {}, bizType) {
+  const biz = (bizType || '').trim();
+  return `# 事業者\n- 名称: ${store.name || ''}\n- エリア: ${store.area || '（未設定）'}\n- 業種: ${biz || '（指定なし。特定業種を勝手に想定しない）'}`;
 }
 
 // アクション別の指示文
 function actionInstruction({ action, theme, currentBody, instruction }) {
   switch (action) {
     case 'generate':
-      return `# タスク\n次のテーマで、上のお手本の文体に合わせたブログ/HP記事を新規に書いてください。\n- テーマ: ${theme || 'お店のお役立ち情報'}\n- 見出し(##)で構成し、読み物として成立させる。\n- 誇大表現・断定的な買取額保証は避ける（景表法配慮）。`;
+      return `# タスク\n次のテーマで、上のお手本の文体に合わせたブログ/HP記事を新規に書いてください。\n- テーマ: ${theme || 'お役立ち情報'}\n- 見出し(##)で構成し、読み物として成立させる。\n- 上の業種に忠実に。特定業種（例: 買取・査定など）を勝手に想定しない。\n- 誇大表現・断定的な効果保証は避ける（景表法配慮）。`;
     case 'continue':
       return `# タスク\n以下の記事の「続き」を、同じ文体で自然に書き足してください。既存部分は出力せず、続きの本文だけを出力。\n\n# これまでの本文\n${currentBody || ''}`;
     case 'polish':
@@ -56,11 +57,11 @@ function actionInstruction({ action, theme, currentBody, instruction }) {
   }
 }
 
-function buildPrompt({ store, style, action, theme, currentBody, instruction }) {
+function buildPrompt({ store, style, action, theme, currentBody, instruction, bizType }) {
   const { guideLines, sampleBlock } = styleGuide(style);
-  return `あなたは買取店の集客に強いプロのブログ/Webライターです。指定の文体を忠実に真似て執筆します。
+  return `あなたは集客に強いプロのブログ/Webライターです。指定の文体を忠実に真似て執筆します。
 
-${storeBlock(store)}
+${storeBlock(store, bizType)}
 
 # 文体ガイド（厳守）
 ${guideLines}${sampleBlock}
@@ -74,19 +75,19 @@ ${actionInstruction({ action, theme, currentBody, instruction })}
 function fallback({ action, theme, currentBody, store }) {
   const nm = store?.name || '当店';
   if (action === 'generate') {
-    return `## ${theme || 'お役立ち情報'}\n\n${nm}です。${theme || 'このテーマ'}についてご紹介します。\n\n（ここに本文を書いてください。AI生成を使うには Claude APIキーの設定が必要です）\n\n## まとめ\nご相談はお気軽にどうぞ。`;
+    return `## ${theme || 'お役立ち情報'}\n\n${nm}です。${theme || 'このテーマ'}についてご紹介します。\n\n（ここに本文を書いてください）\n\n## まとめ\nご相談はお気軽にどうぞ。`;
   }
   if (action === 'shorten') return (currentBody || '').slice(0, Math.ceil((currentBody || '').length / 2));
-  if (action === 'continue') return (currentBody || '') + '\n\n（続き：AI生成にはAPIキーが必要です）';
+  if (action === 'continue') return (currentBody || '') + '\n\n（続き）';
   return currentBody || '';
 }
 
 // メイン。action に応じて生成/編集した本文文字列を返す。
-export async function writeArticle({ store, style, action, theme, currentBody, instruction }) {
+export async function writeArticle({ store, style, action, theme, currentBody, instruction, bizType }) {
   if (!ACTIONS.includes(action)) action = 'generate';
   if (!hasKey()) return { body: fallback({ action, theme, currentBody, store }), source: 'fallback' };
   try {
-    const text = await generateText(buildPrompt({ store, style, action, theme, currentBody, instruction }), { maxTokens: 3000 });
+    const text = await generateText(buildPrompt({ store, style, action, theme, currentBody, instruction, bizType }), { maxTokens: 3000 });
     if (!text) throw new Error('empty');
     return { body: text, source: 'ai' };
   } catch (e) {

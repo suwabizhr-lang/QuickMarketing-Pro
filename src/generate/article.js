@@ -7,7 +7,7 @@ export const CHANNEL_PROFILES = {
   instagram: {
     label: 'Instagram', maxLen: 2000, hashtags: 6,
     tone: 'ビジュアル前提・親しみやすく絵文字を交える・共感から入る',
-    structure: '1行目に強いフック→キャンペーンの魅力→来店/査定のメリット→行動喚起。改行を多めに読みやすく。',
+    structure: '1行目に強いフック→キャンペーンの魅力→利用するメリット→行動喚起。改行を多めに読みやすく。',
   },
   x: {
     label: 'X', maxLen: 130, hashtags: 2,
@@ -22,7 +22,7 @@ export const CHANNEL_PROFILES = {
   blog: {
     label: 'ブログ', maxLen: 2500, hashtags: 0,
     tone: '情報記事調・見出しで整理・SEOを意識した自然な語彙',
-    structure: '見出し(##)を数個使い、導入→キャンペーン詳細→買取の流れ/よくある質問→まとめ。読み物として成立させる。',
+    structure: '見出し(##)を数個使い、導入→キャンペーン詳細→ご利用の流れ/よくある質問→まとめ。読み物として成立させる。',
   },
   homepage: {
     label: 'ホームページ', maxLen: 1500, hashtags: 0,
@@ -37,7 +37,7 @@ export const CHANNEL_PROFILES = {
   line: {
     label: 'LINE', maxLen: 300, hashtags: 0,
     tone: '案内的・丁寧・短文・友だち向けのやわらかさ',
-    structure: '一言挨拶→キャンペーン→来店/査定のひとこと誘導。',
+    structure: '一言挨拶→キャンペーン→ひとこと誘導。',
   },
 };
 
@@ -47,13 +47,15 @@ export function listChannels() {
 
 function hasKey() { return aiEnabled(); }
 
-function buildPrompt({ store, campaign, channel }) {
+function buildPrompt({ store, campaign, channel, bizType }) {
   const p = CHANNEL_PROFILES[channel] || CHANNEL_PROFILES.instagram;
-  return `あなたは買取店の集客に強いSNS/Web運用者です。以下の店舗とキャンペーンをもとに、【${p.label}】向けの投稿本文を1つ作成してください。
+  const biz = (bizType || '').trim();
+  return `あなたは集客に強いSNS/Web運用者です。以下の事業者とキャンペーンをもとに、【${p.label}】向けの投稿本文を1つ作成してください。
 
-# 店舗
-- 店名: ${store.name}
+# 事業者
+- 名称: ${store.name}
 - エリア: ${store.area || '（未設定）'}
+${biz ? `- 業種: ${biz}` : '- 業種: （指定なし。特定業種を勝手に想定しない）'}
 
 # 今日の訴求（キャンペーン）
 - タイトル: ${campaign.title}
@@ -64,9 +66,10 @@ function buildPrompt({ store, campaign, channel }) {
 - トーン: ${p.tone}
 - 構成: ${p.structure}
 - 文字数: ${p.maxLen}文字以内（厳守）
-- 末尾のCTA（査定リンク/QRの案内文）は書かない。本文のみ。
-- 誇大表現・断定的な買取額保証は避ける（景表法配慮）。
-- ${p.hashtags ? `ハッシュタグを${p.hashtags}個ほど本文末尾に付ける。` : 'ハッシュタグは不要。'}
+- 末尾のCTA（リンク/QRの案内文）は書かない。本文のみ。
+- 業種は上記のとおり。特定業種（例: 買取・査定など）を勝手に想定せず、与えられた情報に忠実に。業種不明なら中立的で汎用的に。
+- 誇大表現・断定的な効果保証は避ける（景表法配慮）。
+- ${p.hashtags ? `ハッシュタグを${p.hashtags}個ほど本文末尾に付ける（業種・訴求に合ったもの）。` : 'ハッシュタグは不要。'}
 
 本文だけを出力してください（前置き・説明・見出し「本文:」などは不要）。`;
 }
@@ -81,7 +84,7 @@ function fallback({ store, campaign, channel }) {
       base = `【${campaign.title}】${store.name}${area ? `(${area})` : ''}。${campaign.detail || 'お得なキャンペーン実施中'}`;
       break;
     case 'blog':
-      base = `## ${campaign.title}\n\n${store.name}${area ? `（${area}）` : ''}では、ただいま「${campaign.title}」を実施しています。\n\n${campaign.detail || 'この機会にぜひご利用ください。'}${period}\n\n## 買取の流れ\n1. お品物をお持ち込み、または写真で査定\n2. スタッフが査定\n3. その場で買取\n\n## まとめ\nお得なこの機会に、ぜひお気軽にご相談ください。`;
+      base = `## ${campaign.title}\n\n${store.name}${area ? `（${area}）` : ''}では、ただいま「${campaign.title}」を実施しています。\n\n${campaign.detail || 'この機会にぜひご利用ください。'}${period}\n\n## ご利用の流れ\n1. お問い合わせ・ご相談\n2. 内容のご案内・ご確認\n3. ご利用\n\n## まとめ\nこの機会に、ぜひお気軽にご相談ください。`;
       break;
     case 'homepage':
     case 'gbp':
@@ -96,14 +99,14 @@ function fallback({ store, campaign, channel }) {
     default: // instagram
       base = `【${campaign.title}】\n${store.name}${area ? `（${area}）` : ''}\n\n${campaign.detail || 'お得なキャンペーン実施中です。'}${period}`;
   }
-  if (p.hashtags) base += `\n\n#買取 #${area.replace(/\s/g, '') || '出張買取'} #お得`;
+  if (p.hashtags && area) base += `\n\n#${area.replace(/\s/g, '')}`;
   return base.slice(0, p.maxLen);
 }
 
-export async function generateArticle({ store, campaign, channel }) {
+export async function generateArticle({ store, campaign, channel, bizType }) {
   if (!hasKey()) return { channel, body: fallback({ store, campaign, channel }), source: 'fallback' };
   try {
-    const text = await generateText(buildPrompt({ store, campaign, channel }), { maxTokens: 1500 });
+    const text = await generateText(buildPrompt({ store, campaign, channel, bizType }), { maxTokens: 1500 });
     if (!text) throw new Error('empty');
     const p = CHANNEL_PROFILES[channel] || CHANNEL_PROFILES.instagram;
     return { channel, body: text.slice(0, p.maxLen + 60), source: 'ai' };
@@ -113,9 +116,9 @@ export async function generateArticle({ store, campaign, channel }) {
 }
 
 // 複数チャネルを同時生成（並行）
-export async function generateArticles({ store, campaign, channels }) {
+export async function generateArticles({ store, campaign, channels, bizType }) {
   const list = (channels && channels.length ? channels : ['instagram']).filter(c => CHANNEL_PROFILES[c]);
-  return Promise.all(list.map(channel => generateArticle({ store, campaign, channel })));
+  return Promise.all(list.map(channel => generateArticle({ store, campaign, channel, bizType })));
 }
 
 // 記事末尾に CTA（査定リンク/QRの案内）を付与

@@ -19,9 +19,9 @@ export const AD_VIDEO_TEMPLATES = {
     label: '王道（フック→ベネフィット→実績→CTA）', order: 1,
     scenes: [
       { kind: 'hook', position: 'center', seconds: 3, prompt: '最初の2〜3秒で目を止める強いフック（数字・限定・意外性・ベネフィットのいずれか）。10〜16文字の短い惹句。' },
-      { kind: 'benefit', position: 'bottom', seconds: 4, prompt: 'この店で売る具体的なメリット/特典を一言で。12〜20文字。' },
-      { kind: 'proof', position: 'bottom', seconds: 4, prompt: '安心感・信頼の一言（実績/地域密着/査定無料など）。12〜20文字。' },
-      { kind: 'cta', position: 'center', seconds: 5, prompt: '行動を促す一言（例: 今すぐ無料査定／QRから相談）。10〜16文字。' },
+      { kind: 'benefit', position: 'bottom', seconds: 4, prompt: 'この事業者・商品/サービスの具体的なメリットや特典を一言で。12〜20文字。' },
+      { kind: 'proof', position: 'bottom', seconds: 4, prompt: '安心感・信頼の一言（実績/地域密着/口コミなど）。12〜20文字。' },
+      { kind: 'cta', position: 'center', seconds: 5, prompt: '行動を促す一言（例: 詳しくはこちら／QRから相談）。10〜16文字。' },
     ],
   },
   urgency: {
@@ -34,12 +34,12 @@ export const AD_VIDEO_TEMPLATES = {
     ],
   },
   surprise: {
-    label: '査定額の驚き（こんなに！）', order: 3,
+    label: '驚き・意外性（えっ、こんなに！）', order: 3,
     scenes: [
-      { kind: 'hook', position: 'center', seconds: 3, prompt: '「え、これが◯◯円!?」のような査定額の驚きフック。10〜18文字。' },
-      { kind: 'benefit', position: 'bottom', seconds: 4, prompt: '高く売れる理由/対象品目を一言。12〜20文字。' },
-      { kind: 'proof', position: 'bottom', seconds: 4, prompt: '査定無料・その場で現金など安心の一言。12〜20文字。' },
-      { kind: 'cta', position: 'center', seconds: 5, prompt: 'まずは査定だけでもOKと促すCTA。10〜16文字。' },
+      { kind: 'hook', position: 'center', seconds: 3, prompt: '「え、そうなの!?」のような意外性・ギャップで目を引くフック。10〜18文字。' },
+      { kind: 'benefit', position: 'bottom', seconds: 4, prompt: 'その驚きの理由・具体的な価値を一言。12〜20文字。' },
+      { kind: 'proof', position: 'bottom', seconds: 4, prompt: '安心材料・信頼の一言。12〜20文字。' },
+      { kind: 'cta', position: 'center', seconds: 5, prompt: 'まずは気軽に、と促すCTA。10〜16文字。' },
     ],
   },
 };

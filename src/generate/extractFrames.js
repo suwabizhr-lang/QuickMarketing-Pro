@@ -46,8 +46,8 @@ async function pickWithVision(frames, want) {
     const sample = frames.slice(0, 16);
     const content = [{
       type: 'text',
-      text: `これは買取店が撮影した動画から抽出した連番フレームです。SNS投稿スライドに使う静止画として最適な${want}枚を選んでください。
-優先: 店舗の看板/ロゴがはっきり写る・商品がきれいに写る・ブレていない・明るい。
+      text: `これは事業者が撮影した動画から抽出した連番フレームです。SNS投稿スライドに使う静止画として最適な${want}枚を選んでください。
+優先: 看板/ロゴ/商品/サービスがはっきり写る・きれいに写る・ブレていない・明るい。
 番号は0始まり（送った順）。JSONのみで返答: {"picks":[番号,...]}`,
     }];
     sample.forEach((f) => {

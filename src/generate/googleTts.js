@@ -27,17 +27,53 @@ const VOICE_BY_KEY = Object.fromEntries(JA_VOICES.map(v => [v.key, v.name]));
 export function resolveVoiceName(key) { return VOICE_BY_KEY[key] || key || 'ja-JP-Chirp3-HD-Aoede'; }
 export function listJaVoices() { return JA_VOICES.map(({ key, label, gender }) => ({ key, label, gender })); }
 
-// テキスト→mp3。voiceはUIキー(f-aoede等)またはGoogle音声名。成功でtrue。
-export async function synthToFile(text, outPath, { voice, speed = 1.0 } = {}) {
+// トーン（話し方のニュアンス）プリセット → SSML prosody(rate/pitch)。
+// Googleには感情タグ(怒り等)が無いため、速度とピッチで“それっぽく”寄せる。normalは素の声。
+export const TONES = {
+  normal:   { label: 'ふつう',       rate: null,   pitch: null },
+  bright:   { label: '明るい',       rate: '112%', pitch: '+3st' },
+  energetic:{ label: '元気・テンション高め', rate: '120%', pitch: '+5st' },
+  calm:     { label: '落ち着き',     rate: '92%',  pitch: '-2st' },
+  gentle:   { label: 'やさしい',     rate: '96%',  pitch: '+1st' },
+  serious:  { label: '真面目・低め', rate: '95%',  pitch: '-4st' },
+};
+export function listTones() { return Object.entries(TONES).map(([key, v]) => ({ key, label: v.label })); }
+// Chirp3-HD系はprosody(SSML)が効きにくい。tone指定時に自然なトーンを出すため、
+// tone!=='normal'ならNeural2へ寄せる（同性の標準声）。
+function voiceForTone(name, tone) {
+  if (!tone || tone === 'normal') return name;
+  if (/Chirp3-HD/.test(name)) {
+    // 性別だけ維持してNeural2へ（女性→B、男性→C）
+    const female = JA_VOICES.find(v => v.name === name)?.gender === 'FEMALE';
+    return female ? 'ja-JP-Neural2-B' : 'ja-JP-Neural2-C';
+  }
+  return name;
+}
+function esc(s) { return String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }
+// テキストをSSMLへ。tone→prosody。文末の「。！？」の後に軽いポーズを入れて自然に。
+function toSsml(text, tone) {
+  const t = TONES[tone] || TONES.normal;
+  let body = esc(text).replace(/([。！？])/g, '$1<break time="180ms"/>');
+  if (t.rate || t.pitch) {
+    const attrs = [t.rate ? `rate="${t.rate}"` : '', t.pitch ? `pitch="${t.pitch}"` : ''].filter(Boolean).join(' ');
+    body = `<prosody ${attrs}>${body}</prosody>`;
+  }
+  return `<speak>${body}</speak>`;
+}
+
+// テキスト→mp3。voice=UIキー(f-aoede等)/音声名。tone=話し方(normal/bright/energetic/calm/gentle/serious)。成功でtrue。
+export async function synthToFile(text, outPath, { voice, speed = 1.0, tone = 'normal' } = {}) {
   if (!gTtsEnabled()) return false;
   const t = String(text || '').trim();
   if (!t) return false;
-  const name = resolveVoiceName(voice);
-  // Chirp3-HDはspeakingRateのみ対応（pitch非対応）。0.25〜4.0にクランプ。
-  const rate = Math.max(0.25, Math.min(4.0, Number(speed) || 1.0));
+  const useTone = tone && tone !== 'normal';
+  const name = useTone ? voiceForTone(resolveVoiceName(voice), tone) : resolveVoiceName(voice);
+  const rate = Math.max(0.25, Math.min(4.0, Number(speed) || 1.0)); // speakingRate 0.25〜4.0
   try {
+    // tone指定時はSSML(prosodyで抑揚)。それ以外はプレーンtext(Chirp3-HDの自然さを活かす)。
+    const input = useTone ? { ssml: toSsml(t.slice(0, 900), tone) } : { text: t.slice(0, 900) };
     const body = {
-      input: { text: t.slice(0, 900) },
+      input,
       voice: { languageCode: 'ja-JP', name },
       audioConfig: { audioEncoding: 'MP3', speakingRate: rate },
     };

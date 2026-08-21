@@ -1,9 +1,8 @@
 // 広告クリエイティブ（文面）生成。各メディアの「広告枠」に最適化し、そのままコピペできる形で出力する。
 // 通常投稿(article.js)とは別。広告なので訴求・フック・CTAを強める。自動出稿はしない（人が管理画面へ貼る）。
-import Anthropic from '@anthropic-ai/sdk';
+import { generateText, aiEnabled } from './ai.js';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
-const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
+const hasKey = () => aiEnabled();
 
 // 各メディアの広告フォーマット定義。fields = 出力に含める構成要素（コピペしやすいよう見出し付きで返す）。
 export const AD_FORMATS = {
@@ -106,14 +105,9 @@ export async function generateAdCopy({ store, campaign, media, ctaUrl, style, ex
   if (!AD_FORMATS[media]) media = 'instagram';
   if (!hasKey()) return { media, body: fallback({ store, campaign, media, ctaUrl }), source: 'fallback' };
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: MODEL, max_tokens: 1600,
-      messages: [{ role: 'user', content: buildPrompt({ store, campaign, media, ctaUrl, style, extra }) }],
-    });
-    const text = (msg.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+    const text = await generateText(buildPrompt({ store, campaign, media, ctaUrl, style, extra }), { maxTokens: 1600 });
     if (!text) throw new Error('empty');
-    return { media, body: text, source: 'claude' };
+    return { media, body: text, source: 'ai' };
   } catch (e) {
     return { media, body: fallback({ store, campaign, media, ctaUrl }), source: 'fallback', error: String(e.message || e) };
   }

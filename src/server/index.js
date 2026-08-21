@@ -24,7 +24,7 @@ import { registerAuth, ownerId, authEnabled } from '../auth.js';
 import * as storage from '../storage.js';
 import { sendSubmissionNotice, mailerEnabled } from '../mailer.js';
 import { musicgenToFile, musicgenEnabled } from '../generate/musicgen.js';
-import { synthToFile as gSynthToFile, gTtsEnabled, listJaVoices } from '../generate/googleTts.js';
+import { synthToFile as gSynthToFile, gTtsEnabled, listJaVoices, listTones } from '../generate/googleTts.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -577,14 +577,14 @@ app.post('/api/generate/ad-copy', async (req, res) => {
 // --- 広告動画（テンプレート型 + 既存スライドショーエンジンで合成） ---
 app.get('/api/ad-video/templates', async (req, res) => ok(res, { templates: listAdVideoTemplates(), aspects: listAdVideoAspects(), transitions: listAdVideoTransitions(), aiBgm: musicgenEnabled() }));
 // ナレーションの声一覧（Google TTS有効時のみ声を返す。無効なら空＝UIはOpenAIフォールバック）。
-app.get('/api/tts/voices', async (req, res) => ok(res, { enabled: gTtsEnabled(), voices: gTtsEnabled() ? listJaVoices() : [] }));
+app.get('/api/tts/voices', async (req, res) => ok(res, { enabled: gTtsEnabled(), voices: gTtsEnabled() ? listJaVoices() : [], tones: gTtsEnabled() ? listTones() : [] }));
 // 声の試聴: 指定の声で短いサンプルを生成し、data URL(base64 mp3)で返す（その場再生用）。
 app.post('/api/tts/preview', async (req, res) => {
   if (!gTtsEnabled()) return bad(res, 400, 'ナレーション音声が利用できません');
   const b = req.body || {};
   const sample = (b.text || 'こんにちは。ブランド品の買取なら当店へ。査定は無料です。').slice(0, 120);
   const tmp = join(tmpDir(), `preview-${randomUUID()}.mp3`);
-  const okGen = await gSynthToFile(sample, tmp, { voice: b.voice, speed: NARR_SPEED_MAP[b.speed] ?? 1.05 });
+  const okGen = await gSynthToFile(sample, tmp, { voice: b.voice, speed: NARR_SPEED_MAP[b.speed] ?? 1.05, tone: b.tone || 'normal' });
   if (!okGen) return bad(res, 500, '試聴の生成に失敗しました');
   try {
     const dataUrl = 'data:audio/mpeg;base64,' + readFileSync(tmp).toString('base64');
@@ -661,6 +661,7 @@ app.post('/api/generate/ad-video', async (req, res) => {
       showTelop: b.show_telop !== false, narration: b.narration === true,
       narrVoice: b.narr_voice || null, // Google TTS声キー(f-aoede等)。そのまま伝播。
       narrSpeed: NARR_SPEED_MAP[b.narr_speed] ?? 1.05, // 話速(ゆっくり/標準/早口)
+      narrTone: b.narr_tone || 'normal', // トーン(明るい/元気/落ち着き等)
     });
     const rel = `${store.id}/videos/${randomUUID()}.mp4`;
     const url = await saveAssetFile(rel, readFileSync(r.path), 'video/mp4');
@@ -833,6 +834,25 @@ app.get('/api/stores/:id/bgm', async (req, res) => {
   const store = await db.getStore(req.params.id);
   if (!store) return bad(res, 400, 'store_id が不正です');
   ok(res, { bgm: (await db.listAssets(store.id, 'bgm')).map(a => ({ url: a.url, name: a.meta?.name || a.url })) });
+});
+// AI-BGMを単体生成（動画とは独立。気に入るまで作り直せる）。生成物は店舗bgm assetに保存しURLを返す。
+app.post('/api/bgm/generate', async (req, res) => {
+  const b = req.body || {};
+  if (await guardStore(req, res, b.store_id)) return;
+  const store = await db.getStore(b.store_id);
+  if (!store) return bad(res, 400, 'store_id が不正です');
+  if (!musicgenEnabled()) return bad(res, 400, 'AI-BGM生成が利用できません');
+  const prompt = (b.prompt || '').trim() || `${store.name}の店舗広告向け、明るくキャッチーなインストゥルメンタルBGM`;
+  const secs = Math.max(8, Math.min(60, Number(b.seconds) || 25));
+  const tmp = join(tmpDir(), `bgm-${randomUUID()}.mp3`);
+  const okGen = await musicgenToFile(prompt, tmp, { lengthMs: secs * 1000 });
+  if (!okGen) return bad(res, 500, 'BGMの生成に失敗しました（少し待って再度お試しください）');
+  try {
+    const url = await saveAssetFile(`${store.id}/bgm/aibgm-${randomUUID().slice(0, 6)}.mp3`, readFileSync(tmp), 'audio/mpeg');
+    const name = 'AI生成BGM ' + new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const asset = await db.createAsset({ store_id: store.id, kind: 'bgm', url, meta: { name, ai: true, prompt } });
+    ok(res, { asset, url, name });
+  } finally { try { rmSync(tmp, { force: true }); } catch {} }
 });
 
 // --- ②スライドショー動画生成（写真/抽出静止画スライド + Ken Burns + テロップ + 末尾QR + BGM） ---

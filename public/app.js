@@ -778,12 +778,14 @@ async function refreshAdView() {
 async function loadNarrVoices() {
   const sel = $('avd_narr_voice'); if (!sel) return;
   try {
-    const { enabled, voices } = await api('/api/tts/voices');
+    const { enabled, voices, tones } = await api('/api/tts/voices');
     if (enabled && voices && voices.length) {
       sel.innerHTML = voices.map(v => `<option value="${v.key}">${escapeHtml(v.label)}</option>`).join('');
     } else {
       sel.innerHTML = `<option value="">（標準の声）</option>`; // フォールバック
     }
+    const tsel = $('avd_narr_tone');
+    if (tsel) tsel.innerHTML = (tones && tones.length ? tones : [{key:'normal',label:'ふつう'}]).map(t => `<option value="${t.key}">${escapeHtml(t.label)}</option>`).join('');
   } catch { sel.innerHTML = `<option value="">（標準の声）</option>`; }
 }
 // 選択中の声で短いサンプルを試聴（その場再生）。
@@ -791,9 +793,10 @@ let _previewAudio = null;
 async function previewVoice() {
   const voice = $('avd_narr_voice') ? $('avd_narr_voice').value : '';
   const speed = $('avd_narr_speed') ? $('avd_narr_speed').value : 'normal';
+  const tone = $('avd_narr_tone') ? $('avd_narr_tone').value : 'normal';
   $('avd_narr_prev').textContent = '試聴を生成中…';
   try {
-    const r = await api('/api/tts/preview', 'POST', { voice, speed });
+    const r = await api('/api/tts/preview', 'POST', { voice, speed, tone });
     if (_previewAudio) { _previewAudio.pause(); }
     _previewAudio = new Audio(r.audio);
     await _previewAudio.play();
@@ -852,6 +855,20 @@ async function avdUploadBgm() {
   try { await api('/api/bgm/upload', 'POST', { store_id: state.store.id, data_url: await fileToDataUrl(f), name: f.name }); await loadAdBgm(); alert('BGMを追加しました'); }
   catch (e) { alert('BGMアップロード失敗: ' + e.message); }
   finally { $('avd_bgm_file').value = ''; }
+}
+// AI-BGMを単体生成→試聴プレイヤーにセット＋登録音源リスト更新（気に入るまで押せる）。
+async function genBgmNow() {
+  if (!requireStore()) return;
+  const prompt = $('avd_bgm_prompt') ? $('avd_bgm_prompt').value.trim() : '';
+  $('avd_bgm_state').textContent = 'BGMを生成中…（30秒〜1分）';
+  try {
+    const r = await api('/api/bgm/generate', 'POST', { store_id: state.store.id, prompt });
+    const pl = $('avd_bgm_player');
+    if (pl) { pl.src = r.url; pl.style.display = 'block'; pl.play().catch(()=>{}); }
+    $('avd_bgm_state').textContent = '✅ 生成しました（登録音源にも追加）';
+    await loadAdBgm();
+    if ($('avd_bgm') && r.url) $('avd_bgm').value = r.url; // 生成物を選択状態に
+  } catch (e) { $('avd_bgm_state').textContent = '⚠ ' + e.message; }
 }
 function renderAdThumbs() {
   $('avd_thumbs').innerHTML = (state.adImages || []).map((u, i) =>
@@ -948,6 +965,7 @@ async function genAdVideo() {
       show_telop: $('avd_telop').checked, narration: $('avd_narration').checked,
       narr_voice: $('avd_narr_voice') ? $('avd_narr_voice').value : '',
       narr_speed: $('avd_narr_speed') ? $('avd_narr_speed').value : 'normal',
+      narr_tone: $('avd_narr_tone') ? $('avd_narr_tone').value : 'normal',
     });
     const caps = (r.captions || []).map(escapeHtml).join(' ／ ');
     $('avd_out').innerHTML = `✅ ${r.seconds}秒 / スライド${r.slides}枚 / 比率${escapeHtml(r.aspect)} / BGM${r.bgm ? 'あり' : 'なし'}<br>

@@ -1,9 +1,8 @@
 // ブログ/HP用の記事ライター。文体プロファイル(お手本)を使い、生成/共同編集アクションを1関数で扱う。
 // キャンペーン投稿(article.js)とは別。長め記事・人とAIの往復編集が前提。
-import Anthropic from '@anthropic-ai/sdk';
+import { generateText, aiEnabled } from './ai.js';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
-const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
+const hasKey = () => aiEnabled();
 
 // 対応アクション
 export const ACTIONS = ['generate', 'continue', 'polish', 'expand', 'shorten', 'restyle', 'custom'];
@@ -87,14 +86,9 @@ export async function writeArticle({ store, style, action, theme, currentBody, i
   if (!ACTIONS.includes(action)) action = 'generate';
   if (!hasKey()) return { body: fallback({ action, theme, currentBody, store }), source: 'fallback' };
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: MODEL, max_tokens: 3000,
-      messages: [{ role: 'user', content: buildPrompt({ store, style, action, theme, currentBody, instruction }) }],
-    });
-    const text = (msg.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+    const text = await generateText(buildPrompt({ store, style, action, theme, currentBody, instruction }), { maxTokens: 3000 });
     if (!text) throw new Error('empty');
-    return { body: text, source: 'claude' };
+    return { body: text, source: 'ai' };
   } catch (e) {
     return { body: fallback({ action, theme, currentBody, store }), source: 'fallback', error: String(e.message || e) };
   }

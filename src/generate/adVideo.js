@@ -1,11 +1,10 @@
 // 広告動画ビルダー。テンプレート(型)に沿ってシーンのテロップをAI生成し、既存スライドショーエンジンで合成する。
 // 既存 generateSlideshow を流用（9:16実装済み）。将来 1:1/16:9 はエンジン側拡張で対応予定。
-import Anthropic from '@anthropic-ai/sdk';
 import { getAdVideoTemplate, AD_VIDEO_ASPECTS } from './adVideoTemplates.js';
 import { generateSlideshow } from './video.js';
+import { generateText, aiEnabled } from './ai.js';
 
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
-const hasKey = () => !!process.env.ANTHROPIC_API_KEY;
+const hasKey = () => aiEnabled();
 
 const TONE_TXT = { polite: 'です・ます調', casual: 'だ・である調', friendly: 'やわらかい口語' };
 
@@ -31,9 +30,8 @@ ${sceneList}
 - 各シーンのテロップだけを、1行に1つ、番号や記号を付けずに、上の順番で ${scenes.length} 行出力。
 - 誇大表現・断定的な買取額保証は避ける（景表法配慮）。`;
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({ model: MODEL, max_tokens: 500, messages: [{ role: 'user', content: prompt }] });
-    const text = (msg.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+    const text = await generateText(prompt, { maxTokens: 500 });
+    if (!text) throw new Error('no ai');
     const lines = text.split('\n').map(s => s.replace(/^\s*\d+[.、)]\s*/, '').trim()).filter(Boolean);
     if (lines.length < scenes.length) throw new Error('not enough lines');
     return lines.slice(0, scenes.length);
@@ -55,7 +53,7 @@ function fallbackCaptions({ store, campaign, scenes }) {
 }
 
 // メイン。広告動画を生成して { videoUrl, seconds, ... } を返す（生成物は data/assets/<store> に保存）。
-export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, captions: userCaptions = null, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false, narrVoice = null, narrSpeed = 1.05 }) {
+export async function generateAdVideo({ store, campaign, templateKey, aspect = '9:16', ctaUrl, ctaLabel, style, extra, captions: userCaptions = null, images = [], clips = [], clipSeconds = 6, clipSpeeds = [], colorGrade = 'none', logoPath = null, logoPos = 'top-right', logoSize = 'medium', bgmPath = null, autoBgm = true, transition = 'fade', opening = true, showTelop = true, narration = false, narrVoice = null, narrSpeed = 1.05, narrTone = 'normal' }) {
   const template = getAdVideoTemplate(templateKey) || getAdVideoTemplate('standard');
   const asp = AD_VIDEO_ASPECTS[aspect] || AD_VIDEO_ASPECTS['9:16'];
   // ユーザーが編集したテロップがあれば優先。空要素はAI/雛形で補完。無ければ全部AI生成。
@@ -73,7 +71,7 @@ export async function generateAdVideo({ store, campaign, templateKey, aspect = '
     autoBgm, bgmPath, width: asp.w, height: asp.h,
     transition, openingText: opening ? (store.name || null) : null,
     clips, clipSeconds, clipSpeeds, colorGrade, logoPath, logoPos, logoSize, // 動画クリップ素材＋個別秒数/速度/色補正/ロゴ(位置/サイズ)
-    showTelop, narration, narrVoice, narrSpeed, // テロップ表示ON/OFF・AIナレーションON/OFF・声/話速
+    showTelop, narration, narrVoice, narrSpeed, narrTone, // テロップ表示ON/OFF・AIナレーションON/OFF・声/話速/トーン
   });
   return { ...result, template: templateKey, aspect: AD_VIDEO_ASPECTS[aspect] ? aspect : '9:16', transition, captions };
 }

@@ -1,8 +1,6 @@
 // チャネル別記事生成。Claude 主経路 + フォールバック（APIキー無/失敗時はテンプレ）。
 // 各SNS/媒体の特徴に応じて文体・構成・文字数を変える。複数チャネル同時生成に対応。
-import Anthropic from '@anthropic-ai/sdk';
-
-const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5';
+import { generateText, aiEnabled } from './ai.js';
 
 // チャネル別プロファイル（媒体特性を反映）
 export const CHANNEL_PROFILES = {
@@ -47,7 +45,7 @@ export function listChannels() {
   return Object.entries(CHANNEL_PROFILES).map(([key, v]) => ({ key, label: v.label, maxLen: v.maxLen }));
 }
 
-function hasKey() { return !!process.env.ANTHROPIC_API_KEY; }
+function hasKey() { return aiEnabled(); }
 
 function buildPrompt({ store, campaign, channel }) {
   const p = CHANNEL_PROFILES[channel] || CHANNEL_PROFILES.instagram;
@@ -105,15 +103,10 @@ function fallback({ store, campaign, channel }) {
 export async function generateArticle({ store, campaign, channel }) {
   if (!hasKey()) return { channel, body: fallback({ store, campaign, channel }), source: 'fallback' };
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: MODEL, max_tokens: 1500,
-      messages: [{ role: 'user', content: buildPrompt({ store, campaign, channel }) }],
-    });
-    const text = (msg.content || []).map(b => (b.type === 'text' ? b.text : '')).join('').trim();
+    const text = await generateText(buildPrompt({ store, campaign, channel }), { maxTokens: 1500 });
     if (!text) throw new Error('empty');
     const p = CHANNEL_PROFILES[channel] || CHANNEL_PROFILES.instagram;
-    return { channel, body: text.slice(0, p.maxLen + 60), source: 'claude' };
+    return { channel, body: text.slice(0, p.maxLen + 60), source: 'ai' };
   } catch (e) {
     return { channel, body: fallback({ store, campaign, channel }), source: 'fallback', error: String(e.message || e) };
   }

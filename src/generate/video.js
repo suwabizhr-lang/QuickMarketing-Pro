@@ -234,8 +234,9 @@ export async function generateSlideshow({
   logoPos = 'top-right', logoSize = 'medium', // ロゴ位置(6択)・サイズ(small/medium/large)
   showTelop = true,      // テロップ文言を映像に焼くか
   narration = false,     // 各セグメントの文言をAI音声(TTS)で読み上げBGMに重ねるか
-  narrVoice = null,      // ナレーションの声（OpenAI voice名。null=既定）
+  narrVoice = null,      // ナレーションの声（Google声キー/OpenAI voice名。null=既定）
   narrSpeed = 1.05,      // ナレーションの話速（0.5〜2.0）
+  narrTone = 'normal',   // ナレーションのトーン（Google TTSのSSML prosodyで抑揚付与）
 }) {
   const w = width || W, h = height || H;
   const outDir = join(assetsRoot, storeId);
@@ -338,7 +339,7 @@ export async function generateSlideshow({
         const mp3 = join(tmp, `narr${i}.mp3`);
         // Google TTS(日本語が自然)を優先。無効/失敗ならOpenAI TTSにフォールバック。
         let okSyn = false;
-        if (gTtsEnabled()) okSyn = await gSynthToFile(t, mp3, { voice: narrVoice || undefined, speed: narrSpeed });
+        if (gTtsEnabled()) okSyn = await gSynthToFile(t, mp3, { voice: narrVoice || undefined, speed: narrSpeed, tone: narrTone });
         if (!okSyn && ttsEnabled()) okSyn = await synthToFile(t, mp3, { speed: narrSpeed });
         if (okSyn) narrClips.push({ file: mp3, startSec: useXfade ? (segStart[i] || 0) : 0 });
       }

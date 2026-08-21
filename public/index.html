@@ -549,6 +549,48 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </div></div><!-- /.wrap /.main -->
 </div><!-- /.layout -->
 
+<!-- QR個別フォーム設定ダイアログ -->
+<dialog id="qfcDlg">
+  <div class="dlg-h"><b id="qfc_title">フォーム設定</b><button class="xbtn" onclick="document.getElementById('qfcDlg').close()">×</button></div>
+  <div class="dlg-b">
+    <input type="hidden" id="qfc_id">
+    <p class="muted" style="margin:0 0 10px">このQR/URLの申込フォームだけを変更します（同じ店舗の他のQRには影響しません）。</p>
+
+    <label class="switch" style="margin:6px 0"><input type="checkbox" id="qfc_photo_on" checked style="width:auto" onchange="document.getElementById('qfc_photo_box').style.display=this.checked?'flex':'none'"> 写真の添付欄を表示する</label>
+    <div class="row" id="qfc_photo_box">
+      <div><label>写真 最小枚数</label><input id="qfc_photo_min" type="number" min="0" max="20" value="0"></div>
+      <div><label>写真 最大枚数</label><input id="qfc_photo_max" type="number" min="1" max="20" value="10"></div>
+    </div>
+
+    <label class="switch" style="margin:12px 0 6px"><input type="checkbox" id="qfc_video_on" style="width:auto" onchange="document.getElementById('qfc_video_box').style.display=this.checked?'flex':'none'"> 動画の添付欄を表示する</label>
+    <div class="row" id="qfc_video_box" style="display:none">
+      <div><label>動画 最小本数</label><input id="qfc_video_min" type="number" min="0" max="10" value="0"></div>
+      <div><label>動画 最大本数</label><input id="qfc_video_max" type="number" min="1" max="10" value="3"></div>
+    </div>
+
+    <h4 style="margin:14px 0 4px;font-size:13px">お客様情報の項目</h4>
+    <p class="muted" style="margin:0 0 8px">お名前は常に必須です。</p>
+    <div class="row" style="align-items:center">
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_phone_show" checked style="width:auto" onchange="document.getElementById('qfc_phone_req').disabled=!this.checked"> 電話番号を表示</label>
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_phone_req" style="width:auto"> 必須</label>
+    </div>
+    <div class="row" style="align-items:center">
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_email_show" checked style="width:auto" onchange="document.getElementById('qfc_email_req').disabled=!this.checked"> メールを表示</label>
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_email_req" style="width:auto"> 必須</label>
+    </div>
+    <div class="row" style="align-items:center">
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_addr_show" style="width:auto" onchange="document.getElementById('qfc_addr_req').disabled=!this.checked"> 住所を表示</label>
+      <label class="switch" style="margin:4px 0"><input type="checkbox" id="qfc_addr_req" style="width:auto" disabled> 必須</label>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;align-items:center">
+      <button class="y" onclick="saveQrFormConfig()">保存</button>
+      <button class="ghost" onclick="document.getElementById('qfcDlg').close()">閉じる</button>
+      <span id="qfc_state" class="muted"></span>
+    </div>
+  </div>
+</dialog>
+
 <!-- キャンペーン詳細ダイアログ -->
 <dialog id="campDlg">
   <div class="dlg-h"><b id="dlg_title">キャンペーン</b><button class="xbtn" onclick="document.getElementById('campDlg').close()">×</button></div>

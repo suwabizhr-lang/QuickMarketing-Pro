@@ -345,11 +345,11 @@ app.post('/api/qr', async (req, res) => {
   const store = await db.getStore(b.store_id);
   if (!store) return bad(res, 400, '店舗が見つかりません');
   const bt = await db.getBusinessType(store.business_type_id);
-  // 申込フォーム設定（store_setting.form_config）が無ければ既定を使う
-  const cfg = await db.getSetting(store.id, 'form_config', defaultAssessmentFields());
+  // このQRの初期フォーム設定＝店舗の既定(form_config)をコピー。以後QRごとに個別編集できる。
+  const cfg = normalizeFormConfig(await db.getSetting(store.id, 'form_config', defaultFormConfig()));
   const form = await db.createLeadForm({
     store_id: b.store_id,
-    label: (b.label || '査定フォーム').trim() || '査定フォーム', // QRの名前（店頭用/Web用 等）
+    label: (b.label || 'お問い合わせフォーム').trim() || 'お問い合わせフォーム', // QRの名前（店頭用/Web用 等）
     kind: b.kind || bt.form_kind_default,
     fields: cfg,
   });
@@ -395,6 +395,25 @@ app.post('/api/form-config', async (req, res) => {
   if (!store) return bad(res, 400, 'store_id が不正です');
   const cfg = normalizeFormConfig(b.config || {});
   ok(res, { config: await db.setSetting(store.id, 'form_config', cfg) });
+});
+
+// --- QR/URL個別のフォーム設定（発行済みのQRを後から個別に変更） ---
+app.get('/api/forms/:id/config', async (req, res) => {
+  const form = await db.getLeadForm(req.params.id);
+  if (!form) return bad(res, 404, 'フォームが見つかりません');
+  if (await guardStore(req, res, form.store_id)) return; // 所有店舗チェック
+  const hasOwn = form.fields && Object.keys(form.fields).length > 0;
+  const config = normalizeFormConfig(hasOwn ? form.fields : await db.getSetting(form.store_id, 'form_config', defaultFormConfig()));
+  ok(res, { config, label: form.label });
+});
+app.post('/api/forms/:id/config', async (req, res) => {
+  const form = await db.getLeadForm(req.params.id);
+  if (!form) return bad(res, 404, 'フォームが見つかりません');
+  if (await guardStore(req, res, form.store_id)) return;
+  const b = req.body || {};
+  const cfg = normalizeFormConfig(b.config || {});
+  const updated = await db.updateLeadForm(form.id, { label: (b.label || form.label), fields: cfg });
+  ok(res, { config: updated.fields, label: updated.label });
 });
 
 // --- 送信先設定（応募がどこに届くか：メール / LINE 等） ---
@@ -1011,8 +1030,9 @@ app.get('/f/:slug', async (req, res) => {
   const bt = await db.getBusinessType(store.business_type_id);
   // QRは店舗常設。表示するキャンペーンは「その店舗のアクティブな最新」を自動選択（1枚刷れば貼り替え不要）。
   const campaign = await db.getActiveCampaign(store.id);
-  // フォーム項目・写真枚数・either設定も店舗の最新設定を反映（発行時に固定しない）。
-  const fields = await db.getSetting(store.id, 'form_config', form.fields || {});
+  // フォーム設定: このQR個別の設定(form.fields)を優先。無ければ店舗共通(form_config)にフォールバック。
+  const hasOwn = form.fields && Object.keys(form.fields).length > 0;
+  const fields = hasOwn ? form.fields : await db.getSetting(store.id, 'form_config', defaultFormConfig());
   res.type('html').send(renderPublicForm({ form: { ...form, fields }, store, bt, campaign }));
 });
 app.post('/api/f/:slug/submit', async (req, res) => {
@@ -1021,8 +1041,9 @@ app.post('/api/f/:slug/submit', async (req, res) => {
   const store = await db.getStore(form.store_id);
   const b = req.body || {};
 
-  // フォーム項目は「店舗の最新設定」を優先（QRは店舗常設なので発行時のスナップショットに固定しない）。
-  const cfg = normalizeFormConfig(await db.getSetting(store.id, 'form_config', form.fields || {}));
+  // フォーム設定: このQR個別(form.fields)を優先、無ければ店舗共通。
+  const hasOwn = form.fields && Object.keys(form.fields).length > 0;
+  const cfg = normalizeFormConfig(hasOwn ? form.fields : await db.getSetting(store.id, 'form_config', defaultFormConfig()));
   const c = b.contact || {};
   // 氏名は常に必須
   if (!(c.name || '').trim()) return bad(res, 400, 'お名前を入力してください');

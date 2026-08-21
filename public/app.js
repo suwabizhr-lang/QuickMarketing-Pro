@@ -433,8 +433,44 @@ function renderRegForms() {
       <div class="main"><b>${escapeHtml(f.label)}</b>
         <div class="sub"><a class="link" href="${f.url}" target="_blank">${f.url}</a></div>
         <div class="sub">${fmtDate(f.created_at)}</div></div>
-      <a class="pill" href="${f.qr}" download="qr-${escapeHtml(f.label)}.png">QR保存</a></li>`).join('')
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <button class="sm" onclick="openFormConfig('${f.id}')">フォーム設定</button>
+        <a class="pill" href="${f.qr}" download="qr-${escapeHtml(f.label)}.png" style="text-align:center">QR保存</a>
+      </div></li>`).join('')
     : '<li class="muted">まだQR/URLがありません。上のカードで発行してください。</li>';
+}
+// このQR個別のフォーム設定をモーダルで編集
+async function openFormConfig(formId) {
+  try {
+    const { config: c, label } = await api(`/api/forms/${formId}/config`);
+    $('qfc_id').value = formId;
+    $('qfc_title').textContent = `フォーム設定：${label || ''}`;
+    $('qfc_photo_on').checked = c.photo.enabled !== false; $('qfc_photo_min').value = c.photo.min ?? 0; $('qfc_photo_max').value = c.photo.max ?? 10;
+    $('qfc_photo_box').style.display = $('qfc_photo_on').checked ? 'flex' : 'none';
+    $('qfc_video_on').checked = !!c.video.enabled; $('qfc_video_min').value = c.video.min ?? 0; $('qfc_video_max').value = c.video.max ?? 3;
+    $('qfc_video_box').style.display = $('qfc_video_on').checked ? 'flex' : 'none';
+    $('qfc_phone_show').checked = c.phone.show !== false; $('qfc_phone_req').checked = !!c.phone.required; $('qfc_phone_req').disabled = !$('qfc_phone_show').checked;
+    $('qfc_email_show').checked = c.email.show !== false; $('qfc_email_req').checked = !!c.email.required; $('qfc_email_req').disabled = !$('qfc_email_show').checked;
+    $('qfc_addr_show').checked = !!c.address.show; $('qfc_addr_req').checked = !!c.address.required; $('qfc_addr_req').disabled = !$('qfc_addr_show').checked;
+    $('qfc_state').textContent = '';
+    $('qfcDlg').showModal();
+  } catch (e) { alert('フォーム設定の取得に失敗: ' + e.message); }
+}
+async function saveQrFormConfig() {
+  const formId = $('qfc_id').value;
+  const config = {
+    photo: { enabled: $('qfc_photo_on').checked, min: Number($('qfc_photo_min').value) || 0, max: Number($('qfc_photo_max').value) || 10 },
+    video: { enabled: $('qfc_video_on').checked, min: Number($('qfc_video_min').value) || 0, max: Number($('qfc_video_max').value) || 3 },
+    phone:   { show: $('qfc_phone_show').checked, required: $('qfc_phone_show').checked && $('qfc_phone_req').checked },
+    email:   { show: $('qfc_email_show').checked, required: $('qfc_email_show').checked && $('qfc_email_req').checked },
+    address: { show: $('qfc_addr_show').checked,  required: $('qfc_addr_show').checked && $('qfc_addr_req').checked },
+  };
+  $('qfc_state').textContent = '保存中…';
+  try {
+    await api(`/api/forms/${formId}/config`, 'POST', { config });
+    $('qfc_state').textContent = '✅ 保存しました（このQRのフォームに即反映）';
+    setTimeout(() => $('qfcDlg').close(), 700);
+  } catch (e) { $('qfc_state').textContent = '⚠ ' + e.message; }
 }
 
 // ===== キャンペーン生成ビュー =====

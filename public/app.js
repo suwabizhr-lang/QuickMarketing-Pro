@@ -56,8 +56,10 @@ let AD_FORMATS = []; // 広告フォーマット定義
 
     $('pb_campaign').addEventListener('change', () => loadPublishBoard($('pb_campaign').value));
 
-    $('nav').addEventListener('change', () => setView($('nav').value));
     $('storeSel').addEventListener('change', onPickStore);
+    // スマホ用ハンバーガー/スクリム
+    const hb = $('hamburger'); if (hb) hb.addEventListener('click', () => document.body.classList.toggle('menu-open'));
+    const sc = $('scrim'); if (sc) sc.addEventListener('click', () => document.body.classList.remove('menu-open'));
 
     await loadStores();
     // 前回選んでいた店舗を復元（保存されていて、まだ存在すれば）
@@ -66,20 +68,42 @@ let AD_FORMATS = []; // 広告フォーマット定義
       $('storeSel').value = saved;
       await onPickStore();
     }
-    setView('gen'); // 初期はキャンペーン生成
+    navGo('post'); // TOP＝投稿（ユーザーが最も使う動作）
   } catch (e) { console.error(e); }
 })();
 
 // ===== ビュー切替 =====
 function setView(name) {
   ['reg', 'gen', 'post', 'list', 'article', 'ad'].forEach(v => $('view-' + v).classList.toggle('on', v === name));
-  $('nav').value = name;
   if (name === 'reg') { renderRegStores(); renderRegForms(); }
   if (name === 'gen') refreshGenView();
   if (name === 'post') refreshPostView();
   if (name === 'list') loadCampaignList();
   if (name === 'article') refreshArticleView();
   if (name === 'ad') refreshAdView();
+}
+// サイドバーのメニュークリック: ビュー切替＋（指定あれば）該当セクションへスクロール。スマホはメニューを閉じる。
+function navGo(view, anchor) {
+  setView(view);
+  // メニューのハイライト更新
+  document.querySelectorAll('.sb-nav [data-view]').forEach(b => {
+    const on = b.dataset.view === view && (b.dataset.anchor || '') === (anchor || '');
+    b.classList.toggle('active', on);
+  });
+  // 単独トップ項目(投稿など)はnavtopにactive
+  document.querySelectorAll('.navtop[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === view && !anchor));
+  document.body.classList.remove('menu-open'); // スマホ: 閉じる
+  if (anchor) {
+    // ビュー表示後にスクロール（描画反映を待つ）
+    setTimeout(() => { const el = document.getElementById(anchor); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+  } else {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+}
+// プルダウン開閉（同時に1つだけ開く等はせず、トグル）。
+function toggleGroup(key) {
+  const g = document.querySelector(`.navgroup[data-group="${key}"]`);
+  if (g) g.classList.toggle('open');
 }
 
 // ===== 店舗セレクタ（ヘッダー・全ビュー共有） =====

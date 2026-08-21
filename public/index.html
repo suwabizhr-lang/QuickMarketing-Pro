@@ -3,21 +3,56 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>買取店マーケティングシステム</title>
+<title>QuickMarketing-Pro</title>
 <!-- 認証ガード（認証ON時のみ作動。未ログインは login.html へ。API に Bearer 自動付与）。最初に読む。 -->
 <script src="/auth-guard.js"></script>
 <style>
-:root{--yellow:#FFE600;--ink:#161616;--grey:#F4F4F4}
+:root{--yellow:#FFE600;--ink:#161616;--grey:#F4F4F4;--sidebar:248px}
 *{box-sizing:border-box}
 body{font-family:system-ui,'Chip Text',sans-serif;margin:0;background:var(--grey);color:var(--ink)}
-header{background:var(--ink);color:#fff;padding:12px 20px;position:sticky;top:0;z-index:10}
-.hbar{max-width:940px;margin:0 auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-header h1{margin:0;font-size:16px;flex:0 0 auto}header small{color:#bbb}
-.hbar .sp{flex:1}
-.hsel{display:flex;align-items:center;gap:6px;font-size:12px;color:#ccc}
-.hsel select{padding:7px 10px;border:0;border-radius:8px;font-size:13px;font-family:inherit;min-width:150px}
+
+/* ===== レイアウト: 左サイドバー + メイン ===== */
+.layout{display:flex;min-height:100vh}
+.sidebar{width:var(--sidebar);flex:0 0 var(--sidebar);background:var(--ink);color:#fff;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto}
+.sb-logo{padding:18px 16px 10px}
+.sb-logo img{width:100%;max-width:180px;display:block}
+.sb-store{padding:6px 16px 10px}
+.sb-store label{font-size:11px;color:#9a9a9a;margin:0 0 4px}
+.sb-store select{width:100%;padding:8px 10px;border:0;border-radius:8px;font-size:13px}
+.sb-nav{flex:1;padding:6px 10px}
+.navgroup{margin:2px 0}
+.navtop{display:flex;align-items:center;gap:8px;width:100%;background:transparent;color:#fff;border:0;border-radius:10px;padding:11px 12px;font-size:14px;font-weight:700;cursor:pointer;text-align:left}
+.navtop:hover{background:rgba(255,255,255,.08)}
+.navtop.active{background:var(--yellow);color:var(--ink)}
+.navtop .arrow{margin-left:auto;font-size:11px;opacity:.7;transition:transform .15s}
+.navgroup.open .navtop .arrow{transform:rotate(180deg)}
+.subnav{display:none;flex-direction:column;padding:2px 0 6px 8px}
+.navgroup.open .subnav{display:flex}
+.subnav button{background:transparent;color:#d6d6d6;border:0;text-align:left;padding:8px 12px 8px 26px;font-size:13px;font-weight:500;border-radius:8px;cursor:pointer}
+.subnav button:hover{background:rgba(255,255,255,.08);color:#fff}
+.subnav button.active{color:var(--yellow);font-weight:700}
+.sb-foot{padding:14px 16px;border-top:1px solid rgba(255,255,255,.12)}
+.sb-foot img{width:52px;height:52px;border-radius:12px;display:block;margin-bottom:8px}
+.sb-foot .lo{background:transparent;border:1px solid rgba(255,255,255,.4);color:#fff;font-size:12px;padding:6px 12px}
+
+.main{flex:1;min-width:0}
 .wrap{max-width:940px;margin:0 auto;padding:20px 16px}
 .view{display:none}.view.on{display:block}
+
+/* モバイル用トップバー（PCでは隠す） */
+.mtop{display:none;position:sticky;top:0;z-index:30;background:var(--ink);color:#fff;padding:10px 14px;align-items:center;gap:12px}
+.mtop img{height:28px}
+.hamburger{background:transparent;border:0;color:#fff;font-size:24px;padding:4px 8px;cursor:pointer}
+.scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:40}
+
+/* ===== スマホ: サイドバーをドロワー化、上部にハンバーガー ===== */
+@media(max-width:820px){
+  .layout{display:block}
+  .mtop{display:flex}
+  .sidebar{position:fixed;left:0;top:0;height:100vh;z-index:50;transform:translateX(-100%);transition:transform .22s ease;box-shadow:2px 0 20px rgba(0,0,0,.3)}
+  body.menu-open .sidebar{transform:translateX(0)}
+  body.menu-open .scrim{display:block}
+}
 .step{background:#fff;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 8px rgba(0,0,0,.05)}
 .step h2{margin:0 0 12px;font-size:15px;display:flex;align-items:center;gap:8px}
 .no{background:var(--yellow);color:var(--ink);width:24px;height:24px;border-radius:9999px;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
@@ -69,32 +104,83 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 </style>
 </head>
 <body>
-<header>
-  <div class="hbar">
-    <h1>買取店マーケ <small>MVP</small></h1>
-    <div class="hsel">ビュー
-      <select id="nav">
-        <option value="gen">キャンペーン生成</option>
-        <option value="post">投稿</option>
-        <option value="list">キャンペーン一覧</option>
-        <option value="article">記事（ブログ/HP）</option>
-        <option value="ad">広告</option>
-        <option value="reg">登録</option>
-      </select>
-    </div>
-    <div class="hsel">作業対象の店舗
+<!-- スマホ用トップバー -->
+<div class="mtop">
+  <button class="hamburger" id="hamburger" aria-label="メニュー">≡</button>
+  <img src="/img/logo-wide.png" alt="QuickMarketing-Pro">
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+  <!-- ===== 左サイドバー ===== -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-logo"><img src="/img/logo-wide.png" alt="QuickMarketing-Pro"></div>
+    <div class="sb-store">
+      <label>作業対象の店舗</label>
       <select id="storeSel"><option value="">（店舗を選択）</option></select>
     </div>
-    <div class="sp"></div>
-    <small id="claudeState"></small>
-    <button id="logoutBtn" class="sm ghost" style="display:none;margin-left:10px" title="ログアウト">ログアウト</button>
-  </div>
-</header>
-<div class="wrap">
+    <nav class="sb-nav" id="sbnav">
+      <!-- TOP: 投稿 -->
+      <div class="navgroup">
+        <button class="navtop" data-view="post" onclick="navGo('post')">📣 投稿</button>
+      </div>
+      <!-- キャンペーン -->
+      <div class="navgroup" data-group="campaign">
+        <button class="navtop" onclick="toggleGroup('campaign')">🎯 キャンペーン<span class="arrow">▾</span></button>
+        <div class="subnav">
+          <button data-view="gen" onclick="navGo('gen')">生成</button>
+          <button data-view="list" onclick="navGo('list')">キャンペーン一覧</button>
+        </div>
+      </div>
+      <!-- 記事 -->
+      <div class="navgroup" data-group="article">
+        <button class="navtop" onclick="toggleGroup('article')">📝 記事<span class="arrow">▾</span></button>
+        <div class="subnav">
+          <button data-view="article" data-anchor="a-write" onclick="navGo('article','a-write')">記事を書く</button>
+          <button data-view="article" data-anchor="a-schedule" onclick="navGo('article','a-schedule')">記事の自動生成</button>
+          <button data-view="article" data-anchor="a-profile" onclick="navGo('article','a-profile')">記事AI学習（プロファイル）</button>
+          <button data-view="article" data-anchor="a-saved" onclick="navGo('article','a-saved')">保存済の記事</button>
+        </div>
+      </div>
+      <!-- 広告 -->
+      <div class="navgroup" data-group="ad">
+        <button class="navtop" onclick="toggleGroup('ad')">🎬 広告<span class="arrow">▾</span></button>
+        <div class="subnav">
+          <button data-view="ad" data-anchor="ad-copy" onclick="navGo('ad','ad-copy')">広告文を作る</button>
+          <button data-view="ad" data-anchor="ad-video" onclick="navGo('ad','ad-video')">広告動画を作る</button>
+        </div>
+      </div>
+      <!-- 店舗登録 -->
+      <div class="navgroup" data-group="store">
+        <button class="navtop" onclick="toggleGroup('store')">🏪 店舗登録<span class="arrow">▾</span></button>
+        <div class="subnav">
+          <button data-view="reg" data-anchor="r-store" onclick="navGo('reg','r-store')">店舗を登録</button>
+          <button data-view="reg" data-anchor="r-storelist" onclick="navGo('reg','r-storelist')">登録店舗一覧</button>
+        </div>
+      </div>
+      <!-- パーツ登録 -->
+      <div class="navgroup" data-group="parts">
+        <button class="navtop" onclick="toggleGroup('parts')">🔗 パーツ登録<span class="arrow">▾</span></button>
+        <div class="subnav">
+          <button data-view="reg" data-anchor="r-qr" onclick="navGo('reg','r-qr')">QR / URL 作成</button>
+          <button data-view="reg" data-anchor="r-channel" onclick="navGo('reg','r-channel')">投稿先登録</button>
+          <button data-view="reg" data-anchor="r-list" onclick="navGo('reg','r-list')">登録一覧</button>
+        </div>
+      </div>
+    </nav>
+    <div class="sb-foot">
+      <img src="/img/logo-square.png" alt="QuickMarketing-Pro">
+      <small id="claudeState" style="color:#9a9a9a;display:block;margin-bottom:8px"></small>
+      <button id="logoutBtn" class="lo" style="display:none">ログアウト</button>
+    </div>
+  </aside>
+
+  <!-- ===== メイン ===== -->
+  <div class="main"><div class="wrap">
 
   <!-- ============ 登録ビュー ============ -->
   <section class="view" id="view-reg">
-    <div class="step">
+    <div class="step" id="r-store">
       <h2><span class="no">店</span>店舗（ブランド・会社等の名称）を登録 / 編集</h2>
       <p class="muted">ヘッダーで対象を選ぶと編集、「＋新規」で新しく登録します。</p>
       <div style="margin:6px 0"><button class="sm ghost" onclick="newStore()">＋ 新規で登録する</button></div>
@@ -120,7 +206,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div id="s_out" class="out" style="display:none"></div>
     </div>
 
-    <div class="step">
+    <div class="step" id="r-qr">
       <h2><span class="no">QR</span>QR / URL を作成</h2>
       <p class="muted">来店者はこのQR/URLから申込フォームへ。<b>店舗の常設フォーム</b>です（開くとその店舗のアクティブなキャンペーンを自動表示）。1店舗に複数作れます。</p>
       <div class="row">
@@ -171,7 +257,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div id="dv_out" class="out" style="display:none"></div>
     </div>
 
-    <div class="step">
+    <div class="step" id="r-channel">
       <h2><span class="no">投</span>投稿先を登録</h2>
       <p class="muted">記事を各投稿先へその場のボタンで投稿できます。<b>自動投稿できる投稿先</b>はボタンで即投稿、できない投稿先はコピーして手動投稿します。自動化用と手動用、必要な方だけ入力すればOKです。</p>
       <div class="row">
@@ -188,9 +274,9 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <ul class="list" id="cn_list"><li class="muted">店舗を選択すると表示します。</li></ul>
     </div>
 
-    <div class="step">
+    <div class="step" id="r-list">
       <h2><span class="no">一</span>現在の登録一覧</h2>
-      <h3>登録済みの店舗</h3>
+      <h3 id="r-storelist">登録済みの店舗</h3>
       <ul class="list" id="reg_stores"><li class="muted">読込中…</li></ul>
       <h3>この店舗のQR / URL</h3>
       <ul class="list" id="reg_forms"><li class="muted">店舗を選択すると表示します。</li></ul>
@@ -280,7 +366,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   <section class="view" id="view-article">
     <div class="notice" id="art_guard" style="display:none">ヘッダーで作業対象の店舗を選んでください。</div>
 
-    <div class="step">
+    <div class="step" id="a-profile">
       <h2><span class="no">文</span>文体プロファイル（この店舗の書き方をAIが学習）</h2>
       <p class="muted">過去記事などを「お手本」として登録し、スタイルを指定すると、AIがこの店舗の文体に寄せて記事を書きます。学習は店舗ごとです。</p>
       <div class="row">
@@ -297,7 +383,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div id="st_out" class="out" style="display:none"></div>
     </div>
 
-    <div class="step">
+    <div class="step" id="a-schedule">
       <h2><span class="no">刻</span>自動生成スケジュール</h2>
       <p class="muted">テーマと時刻を登録すると、<b>アプリ起動中</b>にその時刻が来たら、学習した文体で記事の下書きが自動生成されて「保存した記事」に溜まります（アップロードはしません）。</p>
       <div class="row">
@@ -311,7 +397,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <ul class="list" id="sc_list"><li class="muted">店舗を選択すると表示します。</li></ul>
     </div>
 
-    <div class="step">
+    <div class="step" id="a-write">
       <h2><span class="no">筆</span>記事を書く（AIと共同編集）</h2>
       <div class="row">
         <div><label>テーマ</label><input id="ar_theme" placeholder="例: カメラの買取実績／初めての方向けガイド"></div>
@@ -340,7 +426,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       </div>
     </div>
 
-    <div class="step">
+    <div class="step" id="a-saved">
       <h2><span class="no">庫</span>保存した記事</h2>
       <ul class="list" id="ar_list"><li class="muted">店舗を選択すると表示します。</li></ul>
     </div>
@@ -350,7 +436,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   <section class="view" id="view-ad">
     <div class="notice" id="ad_guard" style="display:none">ヘッダーで作業対象の店舗を選んでください。</div>
 
-    <div class="step">
+    <div class="step" id="ad-copy">
       <h2><span class="no">告</span>広告クリエイティブ（各メディア専用フォーマット）</h2>
       <p class="muted">選んだメディアの<b>広告枠にそのままコピペできる形</b>で文面を生成します。配信は各メディアの管理画面で行ってください（自動出稿はしません）。文体プロファイルがあれば反映されます。</p>
       <div class="row">
@@ -364,7 +450,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div id="ad_out"></div>
     </div>
 
-    <div class="step">
+    <div class="step" id="ad-video">
       <h2><span class="no">動</span>広告動画</h2>
       <p class="muted">広告の「型」に沿ってAIがテロップを作り、写真スライド＋テロップ＋末尾CTA（QR）で縦型ショート動画を生成します。生成後はダウンロードして各メディアの管理画面へ入稿してください。</p>
       <div class="row">
@@ -447,7 +533,8 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
     </div>
   </section>
 
-</div>
+  </div></div><!-- /.wrap /.main -->
+</div><!-- /.layout -->
 
 <!-- キャンペーン詳細ダイアログ -->
 <dialog id="campDlg">

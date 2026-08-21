@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>管理画面 | QuickMarketing-Pro</title>
+<style>
+  :root { --ink:#161616; --paper:#fff; --grey:#f4f4f4; --line:#e6e6e6; --yellow:#FFE600; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Chip Text', system-ui, sans-serif; color:var(--ink); background:var(--grey); }
+  header { background:var(--ink); color:#fff; padding:14px 20px; display:flex; align-items:center; justify-content:space-between; }
+  header h1 { font-family:'Chip Display', system-ui, sans-serif; font-size:18px; margin:0; }
+  header .sub { font-size:12px; opacity:.7; }
+  main { max-width:900px; margin:24px auto; padding:0 16px; }
+  .card { background:var(--paper); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+  h2 { font-family:'Chip Display', system-ui, sans-serif; font-size:16px; margin:0 0 4px; }
+  .muted { color:#888; font-size:13px; }
+  label { display:block; font-size:12px; color:#666; margin:10px 0 4px; }
+  input, select { width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; font-size:14px; }
+  .row { display:flex; gap:10px; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:160px; }
+  button { border:none; border-radius:9999px; padding:9px 18px; font-weight:700; cursor:pointer; font-size:14px; }
+  .primary { background:var(--yellow); color:var(--ink); }
+  .ghost { background:transparent; border:1px solid var(--line); color:var(--ink); padding:6px 12px; }
+  table { width:100%; border-collapse:collapse; margin-top:12px; }
+  th, td { text-align:left; padding:10px 8px; border-bottom:1px solid var(--line); font-size:14px; }
+  th { font-size:12px; color:#888; font-weight:600; }
+  .pill { display:inline-block; background:var(--grey); border-radius:9999px; padding:2px 10px; font-size:12px; }
+  .state { font-size:13px; margin-left:8px; }
+  .deny { text-align:center; padding:60px 20px; }
+  .deny .big { font-size:22px; font-family:'Chip Display', system-ui, sans-serif; margin-bottom:8px; }
+  .hide { display:none; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>管理画面</h1>
+    <div class="sub">QuickMarketing-Pro · 選択項目の管理</div>
+  </div>
+  <div>
+    <span id="who" class="sub"></span>
+    <button id="logoutBtn" class="ghost" style="display:none;margin-left:10px">ログアウト</button>
+  </div>
+</header>
+
+<main id="denied" class="hide">
+  <div class="card deny">
+    <div class="big">アクセス権がありません</div>
+    <p class="muted">この画面は管理者のみが利用できます。<br>別のアカウントでログインしている場合はログアウトしてお試しください。</p>
+    <p><a href="/">← システムに戻る</a></p>
+  </div>
+</main>
+
+<main id="app" class="hide">
+  <!-- 業種マスタ -->
+  <div class="card">
+    <h2>業種（業態）マスタ</h2>
+    <p class="muted">店舗作成時に選べる業種の一覧です。AIの文言生成はここで選んだ業種に合わせて変わります。使用中の業種は削除できません。</p>
+    <div class="row" style="align-items:flex-end">
+      <div style="flex:2"><label>業種名（例: 飲食店、美容室、不動産、学習塾…）</label><input id="bt_name" placeholder="業種名を入力"></div>
+      <div><label>CTA既定（任意）</label><input id="bt_cta" placeholder="例: ご予約はこちら"></div>
+      <div style="flex:0 0 auto"><button class="primary" onclick="addBt()">＋ 追加</button></div>
+    </div>
+    <span id="bt_state" class="state muted"></span>
+    <table>
+      <thead><tr><th>業種名</th><th>CTA既定</th><th>使用店舗</th><th></th></tr></thead>
+      <tbody id="bt_rows"></tbody>
+    </table>
+  </div>
+
+  <!-- 汎用オプション -->
+  <div class="card">
+    <h2>その他の選択肢（カテゴリ別）</h2>
+    <p class="muted">将来の拡張用。カテゴリを指定して選択肢を追加・削除できます（例: カテゴリ「地域」に「東京」「大阪」など）。</p>
+    <div class="row" style="align-items:flex-end">
+      <div><label>カテゴリ</label><input id="op_cat" placeholder="例: area"></div>
+      <div style="flex:2"><label>表示ラベル</label><input id="op_label" placeholder="例: 東京都"></div>
+      <div style="flex:0 0 auto"><button class="primary" onclick="addOption()">＋ 追加</button></div>
+    </div>
+    <span id="op_state" class="state muted"></span>
+    <table>
+      <thead><tr><th>カテゴリ</th><th>ラベル</th><th></th></tr></thead>
+      <tbody id="op_rows"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="/auth-guard.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+async function api(path, method='GET', body) {
+  const opt = { method, headers: {} };
+  if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
+  const r = await fetch(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || j.ok === false) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+async function boot() {
+  // auth-guard が /api/* fetch にBearerを自動付与し、準備完了まで待ってくれる。
+  // 未ログインなら auth-guard がログイン画面へリダイレクトする。
+  let me;
+  try { me = await api('/api/admin/me'); } catch (e) { me = { admin:false }; }
+  if (!me.admin) { $('denied').classList.remove('hide'); return; }
+  $('app').classList.remove('hide');
+  if (me.email) $('who').textContent = me.email;
+  await loadBt(); await loadOptions();
+}
+
+async function loadBt() {
+  const { types } = await api('/api/admin/business-types');
+  $('bt_rows').innerHTML = types.map(t => `<tr>
+    <td>${esc(t.name)} <span class="pill">${esc(t.id)}</span></td>
+    <td>${esc(t.cta_default_label||'')}</td>
+    <td>—</td>
+    <td style="text-align:right"><button class="ghost" onclick="delBt('${esc(t.id)}','${esc(t.name)}')">削除</button></td>
+  </tr>`).join('') || `<tr><td colspan="4" class="muted">まだ業種がありません</td></tr>`;
+}
+async function addBt() {
+  const name = $('bt_name').value.trim();
+  if (!name) { $('bt_state').textContent = '業種名を入力してください'; return; }
+  $('bt_state').textContent = '追加中…';
+  try {
+    await api('/api/admin/business-types', 'POST', { name, cta_default_label: $('bt_cta').value.trim() });
+    $('bt_name').value=''; $('bt_cta').value=''; $('bt_state').textContent = '✅ 追加しました';
+    await loadBt();
+  } catch (e) { $('bt_state').textContent = '⚠ ' + e.message; }
+}
+async function delBt(id, name) {
+  if (!confirm(`業種「${name}」を削除しますか？`)) return;
+  try { await api('/api/admin/business-types/'+encodeURIComponent(id), 'DELETE'); await loadBt(); }
+  catch (e) { alert(e.message); }
+}
+
+async function loadOptions() {
+  const { options } = await api('/api/admin/options');
+  $('op_rows').innerHTML = options.map(o => `<tr>
+    <td><span class="pill">${esc(o.category)}</span></td>
+    <td>${esc(o.label)}</td>
+    <td style="text-align:right"><button class="ghost" onclick="delOption('${esc(o.id)}')">削除</button></td>
+  </tr>`).join('') || `<tr><td colspan="3" class="muted">まだ選択肢がありません</td></tr>`;
+}
+async function addOption() {
+  const category = $('op_cat').value.trim(), label = $('op_label').value.trim();
+  if (!category || !label) { $('op_state').textContent = 'カテゴリとラベルを入力してください'; return; }
+  $('op_state').textContent = '追加中…';
+  try {
+    await api('/api/admin/options', 'POST', { category, label });
+    $('op_label').value=''; $('op_state').textContent = '✅ 追加しました';
+    await loadOptions();
+  } catch (e) { $('op_state').textContent = '⚠ ' + e.message; }
+}
+async function delOption(id) {
+  if (!confirm('この選択肢を削除しますか？')) return;
+  try { await api('/api/admin/options/'+encodeURIComponent(id), 'DELETE'); await loadOptions(); }
+  catch (e) { alert(e.message); }
+}
+
+boot();
+</script>
+</body>
+</html>

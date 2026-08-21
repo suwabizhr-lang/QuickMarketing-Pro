@@ -131,6 +131,17 @@ CREATE TABLE IF NOT EXISTS store_setting (
   PRIMARY KEY (store_id, key)
 );
 
+-- 管理者が編集できる汎用の選択肢マスタ（category別: 例 'video_tone' 'color_grade' 等）。
+-- 業種(business_type)は専用テーブルなので、それ以外の将来的な選択肢をここで管理する。
+CREATE TABLE IF NOT EXISTS option_set (
+  id TEXT PRIMARY KEY,
+  category TEXT NOT NULL,
+  key TEXT NOT NULL,
+  label TEXT NOT NULL,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- FK制約を後付け（存在しなければ追加）。前方参照/循環を回避するため全テーブル作成後にまとめて。
 DO $$
 BEGIN

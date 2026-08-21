@@ -20,7 +20,7 @@ import { qrDataUrl } from '../generate/qr.js';
 import { listChannelDrivers, getChannelDriver, GENERATE_TO_DRIVER } from '../channels.js';
 import { publishToChannel } from '../publish/index.js';
 import { startScheduler, runScheduleNow } from '../scheduler.js';
-import { registerAuth, ownerId, authEnabled } from '../auth.js';
+import { registerAuth, ownerId, authEnabled, isAdmin } from '../auth.js';
 import * as storage from '../storage.js';
 import { sendSubmissionNotice, mailerEnabled } from '../mailer.js';
 import { musicgenToFile, musicgenEnabled } from '../generate/musicgen.js';
@@ -34,6 +34,8 @@ const BASE = process.env.PUBLIC_BASE_URL || `http://localhost:${PORT}`;
 app.use(express.json({ limit: '120mb' })); // 画像/動画(base64 dataURL)アップロードのため拡大
 app.use(express.urlencoded({ extended: true, limit: '120mb' }));
 app.use(express.static(join(__dirname, '..', '..', 'public')));
+// 管理画面（/admin でアクセス。中身の権限判定はページ側が /api/admin/me で行う）
+app.get('/admin', (req, res) => res.sendFile(join(__dirname, '..', '..', 'public', 'admin.html')));
 // 生成した動画/QRを配信
 app.use('/assets', express.static(join(__dirname, '..', '..', 'data', 'assets')));
 
@@ -87,6 +89,50 @@ function contrastText(hex) {
 
 // --- 業態マスタ ---
 app.get('/api/business-types', async (req, res) => ok(res, { types: await db.listBusinessTypes() }));
+
+// ===== 管理者専用API（/api/admin/*）。特定IDのみ（ADMIN_EMAILS/ADMIN_USER_IDS）。 =====
+// 管理者ガード: 非管理者は403。
+function guardAdmin(req, res) {
+  if (!isAdmin(req)) { res.status(403).json({ ok: false, error: '管理者のみアクセスできます' }); return true; }
+  return false;
+}
+// 自分が管理者か（UIの出し分け用）。
+app.get('/api/admin/me', async (req, res) => ok(res, { admin: isAdmin(req), email: req.user?.email || null }));
+// 業種の一覧/追加・更新/削除
+app.get('/api/admin/business-types', async (req, res) => { if (guardAdmin(req, res)) return; ok(res, { types: await db.listBusinessTypes() }); });
+app.post('/api/admin/business-types', async (req, res) => {
+  if (guardAdmin(req, res)) return;
+  const b = req.body || {};
+  const name = (b.name || '').trim();
+  if (!name) return bad(res, 400, '業種名を入力してください');
+  // id: 指定が無ければ name から自動生成（英数字化 or ランダム）。既存idは更新扱い。
+  const id = (b.id || '').trim() || (name.replace(/[^\w]+/g, '_').toLowerCase().slice(0, 24) || 'bt') + '_' + Math.random().toString(36).slice(2, 6);
+  const bt = await db.upsertBusinessType({
+    id, name,
+    required_licenses: Array.isArray(b.required_licenses) ? b.required_licenses : [],
+    cta_default_label: (b.cta_default_label || '').trim() || '詳しくはこちら',
+    form_kind_default: (b.form_kind_default || '').trim() || 'contact',
+  });
+  ok(res, { type: bt });
+});
+app.delete('/api/admin/business-types/:id', async (req, res) => {
+  if (guardAdmin(req, res)) return;
+  const id = req.params.id;
+  const used = await db.countStoresByBusinessType(id);
+  if (used > 0) return bad(res, 400, `この業種は${used}件の店舗で使用中のため削除できません。先に店舗の業種を変更してください。`);
+  await db.deleteBusinessType(id);
+  ok(res, { deleted: id });
+});
+// 汎用の選択肢マスタ（category別）
+app.get('/api/admin/options', async (req, res) => { if (guardAdmin(req, res)) return; ok(res, { options: await db.listOptions(req.query.category || null) }); });
+app.post('/api/admin/options', async (req, res) => {
+  if (guardAdmin(req, res)) return;
+  const b = req.body || {};
+  if (!(b.category || '').trim() || !(b.label || '').trim()) return bad(res, 400, 'category と label は必須です');
+  const o = await db.upsertOption({ id: b.id, category: b.category.trim(), key: (b.key || '').trim() || b.label.trim(), label: b.label.trim(), sort_order: b.sort_order });
+  ok(res, { option: o });
+});
+app.delete('/api/admin/options/:id', async (req, res) => { if (guardAdmin(req, res)) return; await db.deleteOption(req.params.id); ok(res, { deleted: req.params.id }); });
 
 // --- 店舗 ---
 // 業態別の必須ライセンス検証（作成・更新で共用）。問題があればエラーメッセージ、無ければ null。

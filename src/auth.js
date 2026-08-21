@@ -19,6 +19,20 @@ export function ownerId(req) {
   return (req && req.user && req.user.id) ? req.user.id : null;
 }
 
+// 管理者判定。ADMIN_EMAILS(カンマ区切り) か ADMIN_USER_IDS に一致する人だけ管理画面に入れる。
+// 認証OFF(ローカル)は単一ユーザー＝常に管理者扱い（開発用）。
+export function isAdmin(req) {
+  if (!authEnabled()) return true;
+  const u = req && req.user;
+  if (!u) return false;
+  const emails = (process.env.ADMIN_EMAILS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const ids = (process.env.ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
+  const email = (u.email || '').toLowerCase();
+  if (emails.length && email && emails.includes(email)) return true;
+  if (ids.length && u.id && ids.includes(u.id)) return true;
+  return false;
+}
+
 // トークン検証（Supabase Auth に問い合わせ）。有効なら user を返す。
 async function verifyToken(token) {
   if (!token) return null;

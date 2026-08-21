@@ -58,6 +58,32 @@ export async function getBusinessType(id) {
 export async function listBusinessTypes() {
   return (await all('SELECT * FROM business_type ORDER BY id')).map(r => ({ ...r, required_licenses: J.parse(r.required_licenses, []) }));
 }
+// 業種を使っている店舗数（削除ガード用）。
+export async function countStoresByBusinessType(id) {
+  const r = await one('SELECT COUNT(*)::int AS n FROM store WHERE business_type_id=$1', [id]);
+  return r?.n ?? 0;
+}
+export async function deleteBusinessType(id) {
+  await q('DELETE FROM business_type WHERE id=$1', [id]);
+}
+
+// --- option_set（管理者が編集する汎用の選択肢マスタ） ---
+export async function listOptions(category) {
+  const rows = category
+    ? await all('SELECT * FROM option_set WHERE category=$1 ORDER BY sort_order, label', [category])
+    : await all('SELECT * FROM option_set ORDER BY category, sort_order, label');
+  return rows;
+}
+export async function upsertOption(o) {
+  const id = o.id || uid();
+  await q(`INSERT INTO option_set (id,category,key,label,sort_order,created_at) VALUES ($1,$2,$3,$4,$5,$6)
+    ON CONFLICT(id) DO UPDATE SET category=excluded.category, key=excluded.key, label=excluded.label, sort_order=excluded.sort_order`,
+    [id, o.category, o.key, o.label, Number(o.sort_order) || 0, now()]);
+  return one('SELECT * FROM option_set WHERE id=$1', [id]);
+}
+export async function deleteOption(id) {
+  await q('DELETE FROM option_set WHERE id=$1', [id]);
+}
 
 // --- store ---
 export async function createStore(s) {

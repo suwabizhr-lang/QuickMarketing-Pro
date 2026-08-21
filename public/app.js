@@ -265,8 +265,10 @@ async function deleteConnection(id) {
 
 function renderLicenses() {
   const bt = TYPES.find(t => t.id === $('s_bt').value);
-  $('s_licenses').innerHTML = (bt?.required_licenses || []).map(l =>
-    `<label>${escapeHtml(l.label)}${l.hint ? `（${escapeHtml(l.hint)}）` : ''} *</label><input id="lic_${l.key}" placeholder="${escapeHtml(l.hint || '')}">`).join('');
+  $('s_licenses').innerHTML = (bt?.required_licenses || []).map(l => {
+    const req = l.required !== false;
+    return `<label>${escapeHtml(l.label)}${l.hint ? `（${escapeHtml(l.hint)}）` : ''} ${req ? '<span style="color:#c0392b">*</span>' : '<span class="muted">（任意）</span>'}</label><input id="lic_${l.key}" placeholder="${escapeHtml(l.hint || '')}">`;
+  }).join('');
 }
 // 店舗ロゴのアップロード（動画に合成）。店舗が保存済みである必要あり。
 async function uploadLogo() {

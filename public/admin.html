@@ -56,17 +56,15 @@
   <!-- 業種マスタ -->
   <div class="card">
     <h2>業種（業態）マスタ</h2>
-    <p class="muted">店舗作成時に選べる業種の一覧です。AIの文言生成はここで選んだ業種に合わせて変わります。使用中の業種は削除できません。</p>
+    <p class="muted">店舗作成時に選べる業種の一覧です。AIの文言生成はここで選んだ業種に合わせて変わります。<br>
+      業種ごとに「登録時に入力させる項目（許可番号・資格番号など）」を自由に設定できます。使用中の業種は削除できません。</p>
     <div class="row" style="align-items:flex-end">
-      <div style="flex:2"><label>業種名（例: 飲食店、美容室、不動産、学習塾…）</label><input id="bt_name" placeholder="業種名を入力"></div>
+      <div style="flex:2"><label>新しい業種名（例: 飲食店、不動産、リサイクルショップ、学習塾…）</label><input id="bt_name" placeholder="業種名を入力"></div>
       <div><label>CTA既定（任意）</label><input id="bt_cta" placeholder="例: ご予約はこちら"></div>
-      <div style="flex:0 0 auto"><button class="primary" onclick="addBt()">＋ 追加</button></div>
+      <div style="flex:0 0 auto"><button class="primary" onclick="addBt()">＋ 業種を追加</button></div>
     </div>
     <span id="bt_state" class="state muted"></span>
-    <table>
-      <thead><tr><th>業種名</th><th>CTA既定</th><th>使用店舗</th><th></th></tr></thead>
-      <tbody id="bt_rows"></tbody>
-    </table>
+    <div id="bt_list"></div>
   </div>
 
   <!-- 汎用オプション -->
@@ -110,24 +108,69 @@ async function boot() {
   await loadBt(); await loadOptions();
 }
 
+let BT = []; // 現在の業種一覧（編集中の状態を保持）
 async function loadBt() {
   const { types } = await api('/api/admin/business-types');
-  $('bt_rows').innerHTML = types.map(t => `<tr>
-    <td>${esc(t.name)} <span class="pill">${esc(t.id)}</span></td>
-    <td>${esc(t.cta_default_label||'')}</td>
-    <td>—</td>
-    <td style="text-align:right"><button class="ghost" onclick="delBt('${esc(t.id)}','${esc(t.name)}')">削除</button></td>
-  </tr>`).join('') || `<tr><td colspan="4" class="muted">まだ業種がありません</td></tr>`;
+  BT = types.map(t => ({ ...t, required_licenses: Array.isArray(t.required_licenses) ? t.required_licenses.map(l => ({ ...l })) : [] }));
+  renderBt();
 }
+function renderBt() {
+  if (!BT.length) { $('bt_list').innerHTML = `<p class="muted">まだ業種がありません</p>`; return; }
+  $('bt_list').innerHTML = BT.map((t, ti) => `
+    <div style="border:1px solid var(--line);border-radius:10px;padding:14px;margin-top:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+        <div><b>${esc(t.name)}</b> <span class="pill">${esc(t.id)}</span></div>
+        <button class="ghost" onclick="delBt('${esc(t.id)}','${esc(t.name)}')">業種を削除</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <div><label>業種名</label><input value="${esc(t.name)}" oninput="BT[${ti}].name=this.value"></div>
+        <div><label>CTA既定</label><input value="${esc(t.cta_default_label||'')}" oninput="BT[${ti}].cta_default_label=this.value"></div>
+      </div>
+      <label style="margin-top:10px">登録時に入力させる項目（許可番号・資格番号など）</label>
+      <div class="muted" style="font-size:12px">「必須」をオフにすると任意入力になります。形式チェック(正規表現)は空でOK。</div>
+      <div id="lic_${ti}">${(t.required_licenses||[]).map((l, li) => licRow(ti, li, l)).join('')}</div>
+      <button class="ghost" style="margin-top:6px" onclick="addLic(${ti})">＋ 入力項目を追加</button>
+      <div style="margin-top:10px"><button class="primary" onclick="saveBt(${ti})">この業種を保存</button> <span id="bt_save_${ti}" class="state muted"></span></div>
+    </div>`).join('');
+}
+function licRow(ti, li, l) {
+  return `<div class="row" data-li="${li}" style="align-items:flex-end;margin-top:6px;padding:8px;background:var(--grey);border-radius:8px">
+    <div style="flex:2"><label>項目名</label><input value="${esc(l.label||'')}" placeholder="例: 古物商許可番号" oninput="BT[${ti}].required_licenses[${li}].label=this.value"></div>
+    <div style="flex:2"><label>ヒント（任意）</label><input value="${esc(l.hint||'')}" placeholder="例: 12桁の数字" oninput="BT[${ti}].required_licenses[${li}].hint=this.value"></div>
+    <div style="flex:2"><label>形式チェック 正規表現（任意）</label><input value="${esc(l.pattern||'')}" placeholder="例: ^\\d{12}$" oninput="BT[${ti}].required_licenses[${li}].pattern=this.value"></div>
+    <div style="flex:0 0 auto"><label>必須</label><input type="checkbox" ${l.required!==false?'checked':''} style="width:auto;transform:scale(1.3)" onchange="BT[${ti}].required_licenses[${li}].required=this.checked"></div>
+    <div style="flex:0 0 auto"><button class="ghost" onclick="rmLic(${ti},${li})">×</button></div>
+  </div>`;
+}
+function addLic(ti) {
+  BT[ti].required_licenses = BT[ti].required_licenses || [];
+  BT[ti].required_licenses.push({ key: 'field_' + Math.random().toString(36).slice(2,7), label: '', hint: '', pattern: '', required: true });
+  renderBt();
+}
+function rmLic(ti, li) { BT[ti].required_licenses.splice(li, 1); renderBt(); }
 async function addBt() {
   const name = $('bt_name').value.trim();
   if (!name) { $('bt_state').textContent = '業種名を入力してください'; return; }
   $('bt_state').textContent = '追加中…';
   try {
-    await api('/api/admin/business-types', 'POST', { name, cta_default_label: $('bt_cta').value.trim() });
-    $('bt_name').value=''; $('bt_cta').value=''; $('bt_state').textContent = '✅ 追加しました';
+    await api('/api/admin/business-types', 'POST', { name, cta_default_label: $('bt_cta').value.trim(), required_licenses: [] });
+    $('bt_name').value=''; $('bt_cta').value=''; $('bt_state').textContent = '✅ 追加しました。下で入力項目を設定できます。';
     await loadBt();
   } catch (e) { $('bt_state').textContent = '⚠ ' + e.message; }
+}
+async function saveBt(ti) {
+  const t = BT[ti];
+  // 空ラベルの項目は除外。keyが無ければlabelから生成。
+  const licenses = (t.required_licenses||[]).filter(l => (l.label||'').trim()).map(l => ({
+    key: (l.key||'').trim() || ('field_' + Math.random().toString(36).slice(2,7)),
+    label: l.label.trim(), hint: (l.hint||'').trim(), pattern: (l.pattern||'').trim(), required: l.required !== false,
+  }));
+  $('bt_save_'+ti).textContent = '保存中…';
+  try {
+    await api('/api/admin/business-types', 'POST', { id: t.id, name: t.name, cta_default_label: t.cta_default_label, required_licenses: licenses });
+    $('bt_save_'+ti).textContent = '✅ 保存しました';
+    await loadBt();
+  } catch (e) { $('bt_save_'+ti).textContent = '⚠ ' + e.message; }
 }
 async function delBt(id, name) {
   if (!confirm(`業種「${name}」を削除しますか？`)) return;

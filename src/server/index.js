@@ -138,8 +138,9 @@ app.delete('/api/admin/options/:id', async (req, res) => { if (guardAdmin(req, r
 // 業態別の必須ライセンス検証（作成・更新で共用）。問題があればエラーメッセージ、無ければ null。
 function validateLicenses(bt, licenses = {}) {
   for (const req_l of bt.required_licenses) {
-    const v = licenses[req_l.key];
-    if (!v) return `${req_l.label} は必須です（${req_l.hint || ''}）`;
+    const v = (licenses[req_l.key] || '').trim ? (licenses[req_l.key] || '').trim() : licenses[req_l.key];
+    const isRequired = req_l.required !== false; // 既定は必須。required:false で任意。
+    if (!v) { if (isRequired) return `${req_l.label} は必須です（${req_l.hint || ''}）`; else continue; }
     if (req_l.pattern && !new RegExp(req_l.pattern).test(String(v)))
       return `${req_l.label} の形式が不正です（${req_l.hint || req_l.pattern}）`;
   }
